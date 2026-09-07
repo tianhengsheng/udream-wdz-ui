@@ -2,17 +2,23 @@
  * 可切换的后端环境预设。vite.config.ts 按 key 注册 proxy：/env/{key}/* → target。
  * 浏览器端 axios 把 `/env/{currentEnv}` 拼到 URL 前缀即命中对应后端。
  *
- * wdz V2 接口前缀 /unified/apiUnified/wdzAi 是网关根路由，pathPrefix 一律 ''。
- * localDirect：直连本地 unified 9002（对应 jar 内 HTML 页面不经网关的用法），
- *   token 仍以 att 头透传，unified 自身不做鉴权，故本地 PC token did=null 的 50130 问题在此档不存在。
- * local：经本地网关 20000，PC 账号密码登录必 50130（见记忆 selftest-ui-guide），需粘贴 newdev/test 正常登录的 token。
+ * 路径前缀（经网关时）：
+ *  - /uc/user/login 等是网关根路由，pathPrefix ''。
+ *  - unified-service 在网关的路由是 Paths=/mgt/**,/mgt/unified/** + StripPrefix=1 + AesAuthFilter（本地网关 actuator 实测，
+ *    /unified/... 直打网关 404），故 serviceOverrides 把 /unified 前缀补成 /mgt/unified/...。
+ *  - localDirect：直连本地 unified 9002，不经网关、unified 自身不鉴权（读接口不需 token；写接口从 att 取操作人，仍需有效 token）。
+ *  - local：本地网关 20000，PC 账号密码登录必 50130（did=null，见记忆 selftest-ui-guide），需在 dev/newdev/test 登录后同桶互通。
  */
+interface Env { key: string; label: string; group?: string; target: string; pathPrefix: string; serviceOverrides?: { prefix: string; pathPrefix: string }[] }
+const gw = (key: string, label: string, target: string, group?: string): Env => ({
+  key, label, group, target, pathPrefix: '', serviceOverrides: [{ prefix: '/unified', pathPrefix: '/mgt' }],
+});
 export const ENV_PRESETS = [
-  { key: 'localDirect', label: '本地直连9002', group: 'devShared', target: 'http://localhost:9002', pathPrefix: '' },
-  { key: 'local', label: '本地网关20000', group: 'devShared', target: 'http://localhost:20000', pathPrefix: '' },
-  { key: 'dev', label: '开发-newdevi', group: 'devShared', target: 'https://api-newdevi.51yxm.com', pathPrefix: '' },
-  { key: 'test', label: '测试', target: 'https://m-test2.51yxm.com', pathPrefix: '' },
-  { key: 'newdev', label: '测试-newdev', target: 'https://api-newdev.51yxm.com', pathPrefix: '' },
+  { key: 'localDirect', label: '本地直连9002', group: 'devShared', target: 'http://localhost:9002', pathPrefix: '' } as Env,
+  gw('local', '本地网关20000', 'http://localhost:20000', 'devShared'),
+  gw('dev', '开发-newdevi', 'https://api-newdevi.51yxm.com', 'devShared'),
+  gw('test', '测试', 'https://m-test2.51yxm.com'),
+  gw('newdev', '测试-newdev', 'https://api-newdev.51yxm.com'),
 ] as const;
 
 export type EnvKey = (typeof ENV_PRESETS)[number]['key'];
@@ -25,6 +31,5 @@ export function getEnv(key: EnvKey) {
 
 /** 账号分桶键：同 group 的环境共用一个账号桶（local/dev 同库互通），未配 group 的按自身 key 隔离。 */
 export function bucketKey(key: EnvKey): string {
-  const env = getEnv(key) as { group?: string };
-  return env.group ?? key;
+  return getEnv(key).group ?? key;
 }

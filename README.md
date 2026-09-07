@@ -24,6 +24,9 @@ src/store/useDialogs.ts 全局弹窗状态 + refreshTick（标记提交后各列
 src/test/hooks.ts      window.__t（nav/click/type/select/setFilter/setToken/snap/table/toasts）
 ```
 
+## 经网关的路径前缀
+unified-service 在网关的路由是 `Paths=/mgt/**,/mgt/unified/**` + StripPrefix=1（本地网关 actuator 实测），所以网关档 envs.ts 用 serviceOverrides 把 `/unified` 补成 `/mgt/unified/...`；`/uc/user/login` 等仍是根路由。本地网关经 Nacos 负载到 unified-service 的**所有**注册实例，若有同事机器也注册了旧代码实例，会出现新端点 404（如 getStoreRankingSummary Not Found），读接口建议用「本地直连9002」，本地网关只用于需要登录态的写接口验证。
+
 ## 写接口需要有效 token
 读接口（列表/详情/排行）本地直连不需 token；**标记提交等写接口**后端从 att 取操作人，无 token 或 token 过期返回 `000006 登录状态已失效`（UI 会弹 token 提示）。jar 内 HTML 页存在 localStorage 的 token 过期后同样提交不了。用 dev/newdev/test 环境账号密码登录一次，同桶 token 互通。
 
