@@ -3,8 +3,8 @@
  * 剔分口径在后端（只有无效/重复剔分），前端只做展示。
  */
 export const APP = 'UDREAM';
-export const DEFAULT_START_DATE = '2026-07-01';
-export const DEFAULT_END_DATE = '2026-07-07';
+export const DEFAULT_START_DATE = '2026-08-22';
+export const DEFAULT_END_DATE = '2026-08-22';
 
 export const RISK_LABELS: Record<string, string> = { HIGH: '高风险', MEDIUM: '中风险', LOW: '低风险', WARNING: '预警' };
 export const RISK_COLORS: Record<string, string> = { HIGH: 'red', MEDIUM: 'orange', LOW: 'green', WARNING: 'gold' };

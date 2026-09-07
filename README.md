@@ -14,7 +14,7 @@ src/envs.ts            环境预设（localDirect/local/dev/test/newdev）
 src/api/client.ts      axios：att 头注入、/env/{key} 前缀、50120/50130 续登提示、19 位 id 字符串兜底
 src/api/wdz.ts         31 端点集中
 src/types/wdz.ts       VO/Req 手抄，id 一律 string
-src/constants/marks.ts 标记值域（一级 7 个与后端 @Pattern 同步）、应用范围、默认日期 07-01~07-07
+src/constants/marks.ts 标记值域（一级 7 个与后端 @Pattern 同步）、应用范围、默认日期 08-22（用户 2026-09-08 指定）
 src/store/useFilters.ts 私单风险列表筛选 + 当前默认规则 id
 src/pages/risk/        私单AI行为检测：RiskListTab 风险列表 / StoreRankingTab 门店排行（→EventQueueModal 查看事件与排队）/ BatchReviewTab 批量核查
 src/pages/records/     核查日志
