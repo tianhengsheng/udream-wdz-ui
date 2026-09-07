@@ -18,7 +18,7 @@ src/constants/marks.ts 标记值域（一级 7 个与后端 @Pattern 同步）�
 src/store/useFilters.ts 私单风险列表筛选 + 当前默认规则 id
 src/pages/risk/        私单AI行为检测：RiskListTab 风险列表 / StoreRankingTab 门店排行（→EventQueueModal 查看事件与排队）/ BatchReviewTab 批量核查
 src/pages/records/     核查日志
-src/pages/rules/       行为权重配置（第三期）
+src/pages/rules/       行为权重配置：RulesPage 规则表 / RuleConfigModal 检测配置弹窗（constants/ruleDefaults.ts 默认值与 detection 结构）/ RuleDetectionModal 规则监测 / MaintenanceCard 维护区（门店×日期重算、清理门店日数据默认试运行）
 src/components/dialogs/ 全局弹窗：CalculationModal 详情/计算过程、ReviewModal 标记、RecordModal 操作记录、AttendanceModal 打卡、OrdersDrawer 排队订单
 src/store/useDialogs.ts 全局弹窗状态 + refreshTick（标记提交后各列表自动刷新）
 src/test/hooks.ts      window.__t（nav/click/type/select/setFilter/setToken/snap/table/toasts）
