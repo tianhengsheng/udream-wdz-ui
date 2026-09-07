@@ -40,8 +40,9 @@ export function EventTable({ events, loading, withStore, withAttendance, selecte
     { title: '标记发型师', dataIndex: 'markedCraftsmanName', width: 90, render: dash },
     { title: '最近标记人', dataIndex: 'lastOperatorName', width: 90, render: dash },
     { title: '最近标记时间', dataIndex: 'lastMarkTime', width: 150, render: fmtTime },
-    { title: '操作', key: 'op', fixed: 'right', width: withAttendance ? 300 : 240, render: (_, e) => (
+    { title: '操作', key: 'op', fixed: 'right', width: withAttendance ? 360 : 300, render: (_, e) => (
       <Space size={0} split={<span style={{ color: '#ddd' }}>|</span>} onClick={(ev) => ev.stopPropagation()}>
+        <Button type="link" size="small" data-testid={`orders-${e.eventId}`} onClick={() => d.openOrders(String(e.eventId))}>排队订单</Button>
         <Button type="link" size="small" onClick={() => openMonitor(e)}>查看监控</Button>
         <Button type="link" size="small" data-testid={`detail-${e.eventId}`} onClick={() => d.openDetail(String(e.eventId))}>详情</Button>
         <Button type="link" size="small" onClick={() => d.openRecords(String(e.eventId))}>操作记录</Button>
