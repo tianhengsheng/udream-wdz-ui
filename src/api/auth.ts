@@ -7,7 +7,7 @@ import type { Resp } from '../types';
 /**
  * PC 后台登录：POST /uc/user/login（account+pwd form body，明文上送、服务端 MD5）。
  * result.token 即完整 att 值，直接作请求头 att。
- * 注意 local 网关档 PC 登录必 50130（did=null），localDirect 档 unified 不鉴权不受影响。
+ * 注意 local 网关档 PC 登录必 50130（did=null），需在 dev/newdev/test 登录后同桶互通。
  */
 function extractToken(res: AxiosResponse<Resp<{ token?: string }>>): string {
   const body = res.data;
