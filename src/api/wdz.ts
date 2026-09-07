@@ -65,6 +65,7 @@ export const saveV2DetectionConfigVersion = (body: { id?: string | null; version
 export const listV2DetectionConfigVersions = () => get<T.DetectionConfigVersion[]>('listV2DetectionConfigVersions', { app: APP });
 export const setDefaultV2DetectionConfigVersion = (id: string) => post<T.DetectionConfigVersion>('setDefaultV2DetectionConfigVersion', { app: APP, id });
 export const refreshDetectionResults = (startDate: string, endDate: string, storeName?: string) => post<T.RefreshDetectionResult>('refreshDetectionResults', { app: APP, startDate, endDate, storeName });
+export const refreshStoreDailyStat = (startDate: string, endDate: string) => post<{ statDate: string; rowCount: number; rowsWithOrders: number; costMs: number }>('refreshStoreDailyStat', { app: APP, startDate, endDate });
 export const cleanStoreDayData = (cleanDate: string, storeIds: string[], dryRun: boolean) => post<T.CleanStoreDayResult>('cleanStoreDayData', { cleanDate, storeIds, dryRun });
 
 // V1 端点，但 V2 页面「查看监控」也用它：按门店/设备/事件定位到事件前 30 秒的监控 h5 地址

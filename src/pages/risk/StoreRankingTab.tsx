@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Card, DatePicker, Input, Space, Table, message, type TableColumnsType } from 'antd';
 import dayjs from 'dayjs';
-import { exportStoreRanking, getStoreRankingSummary, pageStoreRanking } from '../../api/wdz';
+import { exportStoreRanking, getStoreRankingSummary, pageStoreRanking, refreshStoreDailyStat } from '../../api/wdz';
 import { AreaCascade, type AreaValue } from '../../components/AreaCascade';
 import { L } from '../../components/EventFilterFields';
 import { SummaryStats } from '../../components/SummaryStats';
@@ -32,6 +32,18 @@ export function StoreRankingTab({ active }: { active: boolean }) {
   const [summary, setSummary] = useState<RiskSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [queueStore, setQueueStore] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  // 手动刷快照：一次只允许一天（后端 DTO 同样校验），刷完自动重查排行
+  const singleDay = !!dates[0] && dates[0] === dates[1];
+  const doRefreshStat = async () => {
+    if (!singleDay) { message.error('快照刷新一次只能选择一天'); return; }
+    setRefreshing(true);
+    try {
+      const r = await refreshStoreDailyStat(dates[0]!, dates[1]!);
+      (r.rowCount && !r.rowsWithOrders ? message.warning : message.success)(`快照已刷新 ${r.statDate}：${r.rowCount} 行，其中订单数>0 的 ${r.rowsWithOrders} 行，耗时 ${r.costMs}ms` + (r.rowCount && !r.rowsWithOrders ? '（订单源该日可能没数据）' : ''), 6);
+      load();
+    } catch { /* 拦截器已提示 */ } finally { setRefreshing(false); }
+  };
   const inited = useRef(false);
 
   const validRange = () => {
@@ -83,6 +95,7 @@ export function StoreRankingTab({ active }: { active: boolean }) {
           <span style={{ color: '#999' }}>跨度不超过 7 天</span>
           <Button type="primary" data-testid="ranking-search" onClick={search}>查询</Button>
           <Button data-testid="ranking-reset" onClick={() => { setArea({}); setStoreName(''); setDates([DEFAULT_START_DATE, DEFAULT_END_DATE]); setTimeout(search, 0); }}>重置</Button>
+          <Button data-testid="ranking-refresh-stat" disabled={!singleDay} loading={refreshing} onClick={doRefreshStat} title={singleDay ? '重建所选日期的门店排行日快照（全部门店）' : '起止须为同一天'}>刷新快照</Button>
         </Space>
       </div>
       <SummaryStats s={summary} />
