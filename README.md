@@ -6,11 +6,11 @@
 ## 启动
 - 后端仓库 `.claude/launch.json` 配置名 `wdz-ui`（preview_start），端口 8080（与 scanbuy-ui/mqtt-ui 互斥）。
 - 手动：`npm run dev`。
-- 默认环境「本地直连9002」：需本地 IDEA 起 `UnifiedAPP`；unified 自身不鉴权，不设 token 也能查。其他环境走网关，需在右上角设 PC token（粘贴或账号密码登录；本地网关档 PC 登录必 50130，用 dev/newdev/test 登录后同桶互通）。
+- 一律经网关（默认「本地网关20000」，需本地 IDEA 起 GatewayApp + UnifiedAPP），右上角设 PC token（粘贴或账号密码登录；本地网关档 PC 登录必 50130，用 dev/newdev/test 登录后同桶互通）。
 
 ## 结构
 ```
-src/envs.ts            环境预设（localDirect/local/dev/test/newdev）
+src/envs.ts            环境预设（local/dev/test/newdev，unified 走 /mgt 前缀）
 src/api/client.ts      axios：att 头注入、/env/{key} 前缀、50120/50130 续登提示、19 位 id 字符串兜底
 src/api/wdz.ts         31 端点集中
 src/types/wdz.ts       VO/Req 手抄，id 一律 string
@@ -28,7 +28,7 @@ src/test/hooks.ts      window.__t（nav/click/type/select/setFilter/setToken/sna
 unified-service 在网关的路由是 `Paths=/mgt/**,/mgt/unified/**` + StripPrefix=1（本地网关 actuator 实测），所以网关档 envs.ts 用 serviceOverrides 把 `/unified` 补成 `/mgt/unified/...`；`/uc/user/login` 等仍是根路由。本地网关经 Nacos 负载到 unified-service 的所有注册实例（可用 `curl localhost:20000/actuator/gateway/routes` 看当前解析到哪台），若别的机器也注册了实例，请求可能落到非本机代码。改 envs.ts 的代理规则后必须重启 vite。
 
 ## 写接口需要有效 token
-读接口（列表/详情/排行）本地直连不需 token；**标记提交等写接口**后端从 att 取操作人，无 token 或 token 过期返回 `000006 登录状态已失效`（UI 会弹 token 提示）。jar 内 HTML 页存在 localStorage 的 token 过期后同样提交不了。用 dev/newdev/test 环境账号密码登录一次，同桶 token 互通。
+**标记提交等写接口**后端从 att 取操作人，无 token 或 token 过期返回 `000006 登录状态已失效`（UI 会弹 token 提示）。jar 内 HTML 页存在 localStorage 的 token 过期后同样提交不了。用 dev/newdev/test 环境账号密码登录一次，同桶 token 互通。
 
 ## 红线
 - eventId / storeId / orgId 全链路字符串，禁 Number()。

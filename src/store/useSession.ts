@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { DEFAULT_ENV, bucketKey, type EnvKey } from '../envs';
+import { DEFAULT_ENV, ENV_PRESETS, bucketKey, type EnvKey } from '../envs';
 
 /**
  * 账号对象（只有 PC 后台一端：wdz V2 接口全是 apiUnified 后台接口）。
@@ -120,6 +120,8 @@ export const useSession = create<SessionState>()(
       partialize: (s) => ({ currentEnv: s.currentEnv, accountsByEnv: s.accountsByEnv, activeByEnv: s.activeByEnv }),
       merge: (persisted, current) => {
         const s = { ...current, ...(persisted as Partial<SessionState>) } as SessionState;
+        // 已删除的环境 key（如旧 localDirect）回落默认
+        if (!ENV_PRESETS.some((e) => e.key === s.currentEnv)) s.currentEnv = DEFAULT_ENV;
         return { ...s, ...derive(s.accountsByEnv || {}, s.activeByEnv || {}, s.currentEnv) };
       },
     },
