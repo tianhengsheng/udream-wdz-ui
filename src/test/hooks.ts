@@ -36,6 +36,8 @@ function setInputValue(input: HTMLInputElement | HTMLTextAreaElement, value: str
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** 只取可见表格（antd Tabs 隐藏页签仍在 DOM 里） */
+const visibleTables = () => [...document.querySelectorAll<HTMLElement>('.ant-table-wrapper')].filter((t) => t.offsetParent !== null);
 
 const __t = {
   nav(label: string) {
@@ -67,7 +69,8 @@ const __t = {
     if (!box) return { ok: false, error: `select not found: ${selBoxText}` };
     box.querySelector('.ant-select-selector')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     await sleep(400);
-    const search = document.querySelector<HTMLInputElement>('.ant-select-open .ant-select-selection-search-input');
+    // 只有 showSearch 的下拉才输入过滤（默认 filterOption 按 value 过滤，非搜索下拉输入会把选项全滤掉）
+    const search = document.querySelector<HTMLInputElement>('.ant-select-open.ant-select-show-search .ant-select-selection-search-input');
     if (search) { setInputValue(search, optionText); await sleep(400); }
     const opt = [...document.querySelectorAll<HTMLElement>('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option')].find((o) => norm(o.textContent).includes(norm(optionText)));
     if (!opt) return { ok: false, error: `option not found: ${optionText}` };
@@ -87,13 +90,13 @@ const __t = {
     const s = useSession.getState();
     const f = useFilters.getState();
     const modal = document.querySelector<HTMLElement>('.ant-modal-wrap:not([style*="display: none"]) .ant-modal-title');
-    const tables = [...document.querySelectorAll<HTMLElement>('.ant-table-wrapper')].map((t) => ({ rows: t.querySelectorAll('tbody tr.ant-table-row').length }));
+    const tables = visibleTables().map((t) => ({ id: t.getAttribute('data-testid') || t.closest('[data-testid]')?.getAttribute('data-testid') || '', rows: t.querySelectorAll('tbody tr.ant-table-row').length }));
     const summary = document.querySelector<HTMLElement>('[data-testid="summary"]')?.innerText.replace(/\s+/g, ' ');
     return { env: s.currentEnv, user: s.currentUser()?.name || null, page: norm(document.querySelector('.ant-menu-item-selected')?.textContent), ruleId: f.ruleId, filter: f.risk, modal: modal?.textContent || null, tables, summary, toasts: toastLog.slice(-5) };
   },
   /** 表格文本（第 n 个表，含表头） */
   table(n = 0) {
-    const t = document.querySelectorAll<HTMLElement>('.ant-table-wrapper')[n];
+    const t = visibleTables()[n];
     if (!t) return { ok: false, error: 'table not found' };
     const rows = [...t.querySelectorAll('tbody tr.ant-table-row')].map((r) => [...r.querySelectorAll('td')].map((c) => norm(c.textContent)));
     return { head: [...t.querySelectorAll('thead th')].map((c) => norm(c.textContent)), rows };

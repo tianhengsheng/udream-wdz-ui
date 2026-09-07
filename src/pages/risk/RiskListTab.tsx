@@ -7,7 +7,7 @@ import { DyeTag, PrimaryTag, ReviewTag, RiskTag } from '../../components/Tags';
 import { riskPayload, useFilters } from '../../store/useFilters';
 import type { RiskEvent, RiskSummary, RiskWindow } from '../../types/wdz';
 import { fmtTime, num } from '../../utils/format';
-import { CalculationModal } from './CalculationModal';
+import { useDialogs } from '../../store/useDialogs';
 
 const windowKey = (w: RiskWindow) => `${w.storeId || w.storeName || ''}|${w.windowStart || ''}`;
 
@@ -31,7 +31,7 @@ export function RiskListTab({ active }: { active: boolean }) {
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState<RiskSummary | null>(null);
   const [expanded, setExpanded] = useState<string[]>([]);
-  const [detailEventId, setDetailEventId] = useState<string | null>(null);
+  const { openDetail, refreshTick } = useDialogs();
   const inited = useRef(false);
 
   const load = async () => {
@@ -54,6 +54,8 @@ export function RiskListTab({ active }: { active: boolean }) {
     inited.current = true;
     loadRule().then(load);
   }, [active]);
+  // 标记提交后刷新列表（对应 v2 submitReview 后 loadRiskData）
+  useEffect(() => { if (inited.current) load(); }, [refreshTick]);
 
   // 排序：同列三击循环 升→降→取消
   const onSort = (field: string) => {
@@ -99,7 +101,7 @@ export function RiskListTab({ active }: { active: boolean }) {
     { title: '标记订单ID', dataIndex: 'markedOrderNo', width: 150, render: (v) => v || '-' },
     { title: '标记时间', dataIndex: 'lastMarkTime', width: 150, render: fmtTime },
     { title: '标记人', dataIndex: 'lastOperatorName', width: 80, render: (v) => v || '-' },
-    { title: '操作', key: 'op', width: 90, fixed: 'right', render: (_, e) => <Button type="link" size="small" data-testid={`detail-${e.eventId}`} onClick={() => setDetailEventId(String(e.eventId))}>查看/核实</Button> },
+    { title: '操作', key: 'op', width: 90, fixed: 'right', render: (_, e) => <Button type="link" size="small" data-testid={`detail-${e.eventId}`} onClick={() => openDetail(String(e.eventId))}>查看/核实</Button> },
   ];
 
   const doExport = async () => {
@@ -136,7 +138,6 @@ export function RiskListTab({ active }: { active: boolean }) {
           pagination={{ current: f.pageNum, pageSize: f.pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (t) => `共 ${t} 个窗口`,
             onChange: (p, ps) => { setRisk({ pageNum: ps !== f.pageSize ? 1 : p, pageSize: ps }); setTimeout(load, 0); } }} />
       </Card>
-      <CalculationModal eventId={detailEventId} onClose={() => setDetailEventId(null)} />
     </div>
   );
 }

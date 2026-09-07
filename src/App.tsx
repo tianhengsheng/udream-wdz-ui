@@ -6,6 +6,7 @@ import { TopBar } from './components/TopBar';
 import { RiskPage } from './pages/risk/RiskPage';
 import { RulesPage } from './pages/rules/RulesPage';
 import { RecordsPage } from './pages/records/RecordsPage';
+import { GlobalDialogs } from './components/dialogs/GlobalDialogs';
 
 /** 左侧菜单与 jar 内 v2 页面一致：行为权重配置 / 私单AI行为检测 / 核查日志 */
 const PAGES = [
@@ -31,6 +32,7 @@ export default function App() {
         <Layout style={{ background: '#f5f5f5' }}>
           <TopBar />
           <Active />
+          <GlobalDialogs />
         </Layout>
       </Layout>
     </ConfigProvider>

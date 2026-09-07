@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Card, Descriptions, Modal, Space, Table, Tag, type TableColumnsType } from 'antd';
+import { Button, Card, Descriptions, Modal, Space, Table, Tag, type TableColumnsType } from 'antd';
 import { getRiskEventDetail } from '../../api/wdz';
 import { DyeTag, PrimaryTag, ReviewTag, RiskTag } from '../../components/Tags';
 import { MediaThumb } from '../../components/MediaThumb';
 import { useFilters } from '../../store/useFilters';
+import { useDialogs } from '../../store/useDialogs';
+import { openMonitor } from '../../utils/monitor';
 import type { EventDetail, EventOrder, RiskEvent } from '../../types/wdz';
 import { dash, duration, fmtTime, money, num } from '../../utils/format';
 
@@ -27,14 +29,17 @@ const orderCols: TableColumnsType<EventOrder> = [
 ];
 
 /** 事件详情 / 计算过程弹窗（对应 v2 openDetail → openCalculationModal）：数据收集 → 统计分析 → 评分计算过程 */
-export function CalculationModal({ eventId, onClose }: { eventId: string | null; onClose: () => void }) {
+export function CalculationModal() {
+  const { detailEventId: eventId, close, refreshTick, openReview, openRecords, openAttendance } = useDialogs();
+  const onClose = () => close('detail');
   const [detail, setDetail] = useState<EventDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  // 标记后不关弹窗：refreshTick 变化按当前事件重拉详情原位重渲染（评分/标记为重算后结果）
   useEffect(() => {
     if (!eventId) { setDetail(null); return; }
     setLoading(true);
     getRiskEventDetail(eventId, useFilters.getState().ruleId).then(setDetail).catch(() => setDetail(null)).finally(() => setLoading(false));
-  }, [eventId]);
+  }, [eventId, refreshTick]);
 
   const item = detail?.event;
   const ex = !!item?.excluded;
@@ -58,6 +63,14 @@ export function CalculationModal({ eventId, onClose }: { eventId: string | null;
     { title: '标记类型二级', dataIndex: 'secondaryMarkType', width: 140, render: dash },
     { title: '标记订单', dataIndex: 'markedOrderNo', width: 150, render: dash },
     { title: '标记发型师', dataIndex: 'markedCraftsmanName', width: 90, render: dash },
+    { title: '操作', key: 'op', fixed: 'right', width: 280, render: (_, e) => (
+      <Space size={0} split={<span style={{ color: '#ddd' }}>|</span>}>
+        <Button type="link" size="small" onClick={() => openMonitor(e)}>查看监控</Button>
+        <Button type="link" size="small" onClick={() => document.querySelector('[data-testid="calc-score"]')?.scrollIntoView({ behavior: 'smooth' })}>查看评分</Button>
+        <Button type="link" size="small" data-testid={`calc-review-${e.eventId}`} onClick={() => openReview([e])}>标记私单/无风险</Button>
+        <Button type="link" size="small" onClick={() => openRecords(String(e.eventId))}>操作记录</Button>
+      </Space>
+    ) },
   ];
 
   return (
@@ -74,8 +87,8 @@ export function CalculationModal({ eventId, onClose }: { eventId: string | null;
               <Descriptions.Item label="风险等级"><RiskTag v={item.riskLevel} /></Descriptions.Item>
             </Descriptions>
           </Card>
-          <Card size="small" title={`AI事件详情（${item.primaryMarkType ? '已标记' : '未标记'}）· 评分按整个窗口计算，当前事件高亮`}>
-            <Table<RiskEvent> size="small" rowKey="eventId" columns={evCols} dataSource={windowEvents} pagination={false} scroll={{ x: 1500 }}
+          <Card size="small" title={`AI事件详情（${item.primaryMarkType ? '已标记' : '未标记'}）· 评分按整个窗口计算，当前事件高亮`} extra={<Button size="small" onClick={() => openAttendance(String(item.eventId))}>查询当天打卡记录</Button>}>
+            <Table<RiskEvent> size="small" rowKey="eventId" columns={evCols} dataSource={windowEvents} pagination={false} scroll={{ x: 1800 }}
               rowClassName={(e) => (String(e.eventId) === String(item.eventId) ? 'row-current' : '')} />
           </Card>
           <Card size="small" title={<span>窗口内订单 <Tag>实时查询</Tag></span>}>

@@ -19,7 +19,8 @@ export const http = axios.create({
   transformResponse: [(data) => (typeof data === 'string' ? (bigIntSafeParse(data) ?? data) : data)],
 });
 
-const TOKEN_EXPIRY_CODES = new Set(['50120', '50130', '50131', '000002']);
+// 000006=登录状态已失效（unified 写接口从 att 取操作人）
+const TOKEN_EXPIRY_CODES = new Set(['50120', '50130', '50131', '000002', '000006']);
 
 let tokenExpiredModalOpen = false;
 function showTokenExpired(url?: string, status?: number, backendMsg?: string) {

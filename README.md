@@ -16,10 +16,16 @@ src/api/wdz.ts         31 端点集中
 src/types/wdz.ts       VO/Req 手抄，id 一律 string
 src/constants/marks.ts 标记值域（一级 7 个与后端 @Pattern 同步）、应用范围、默认日期 07-01~07-07
 src/store/useFilters.ts 私单风险列表筛选 + 当前默认规则 id
-src/pages/risk/        私单AI行为检测（RiskListTab 已完成；排行/批量第二期）
-src/pages/records/ rules/  第二/三期
+src/pages/risk/        私单AI行为检测：RiskListTab 风险列表 / StoreRankingTab 门店排行（→EventQueueModal 查看事件与排队）/ BatchReviewTab 批量核查
+src/pages/records/     核查日志
+src/pages/rules/       行为权重配置（第三期）
+src/components/dialogs/ 全局弹窗：CalculationModal 详情/计算过程、ReviewModal 标记、RecordModal 操作记录、AttendanceModal 打卡、OrdersDrawer 排队订单
+src/store/useDialogs.ts 全局弹窗状态 + refreshTick（标记提交后各列表自动刷新）
 src/test/hooks.ts      window.__t（nav/click/type/select/setFilter/setToken/snap/table/toasts）
 ```
+
+## 写接口需要有效 token
+读接口（列表/详情/排行）本地直连不需 token；**标记提交等写接口**后端从 att 取操作人，无 token 或 token 过期返回 `000006 登录状态已失效`（UI 会弹 token 提示）。jar 内 HTML 页存在 localStorage 的 token 过期后同样提交不了。用 dev/newdev/test 环境账号密码登录一次，同桶 token 互通。
 
 ## 红线
 - eventId / storeId / orgId 全链路字符串，禁 Number()。
