@@ -6,7 +6,7 @@ export const APP = 'UDREAM';
 export const DEFAULT_START_DATE = '2026-08-22';
 export const DEFAULT_END_DATE = '2026-08-22';
 
-export const RISK_LABELS: Record<string, string> = { HIGH: '高风险', MEDIUM: '中风险', LOW: '低风险', WARNING: '预警' };
+export const RISK_LABELS: Record<string, string> = { HIGH: '高风险', MEDIUM: '中风险', LOW: '低风险', WARNING: '预警', EXCLUDED: '无效' };
 export const RISK_COLORS: Record<string, string> = { HIGH: 'red', MEDIUM: 'orange', LOW: 'green', WARNING: 'gold' };
 export const REVIEW_LABELS: Record<string, string> = { UNVERIFIED: '未核实', FIRST_REVIEWED: '初核', SECOND_REVIEWED: '复核' };
 export const REVIEW_COLORS: Record<string, string> = { UNVERIFIED: 'default', FIRST_REVIEWED: 'blue', SECOND_REVIEWED: 'purple' };

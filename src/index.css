@@ -415,3 +415,5 @@ body {
 /* wdz：命中事件高亮 / 当前事件高亮 */
 .row-matched > td { background: #fffbe6 !important; }
 .row-current > td { background: #e6f4ff !important; }
+.row-nocalc > td { color: #bbb; }
+.row-nocalc .ant-tag { opacity: .55; }

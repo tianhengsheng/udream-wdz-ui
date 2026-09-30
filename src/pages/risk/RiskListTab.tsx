@@ -49,10 +49,11 @@ export function RiskListTab({ active }: { active: boolean }) {
     } catch { setWindows([]); } finally { setLoading(false); }
   };
 
+  // 首次切入先取规则；之后每次切入都按共用筛选重查（其他页签可能改过条件）
   useEffect(() => {
-    if (!active || inited.current) return;
-    inited.current = true;
-    loadRule().then(load);
+    if (!active) return;
+    if (!inited.current) { inited.current = true; loadRule().then(load); return; }
+    load();
   }, [active]);
   // 标记提交后刷新列表（对应 v2 submitReview 后 loadRiskData）
   useEffect(() => { if (inited.current) load(); }, [refreshTick]);

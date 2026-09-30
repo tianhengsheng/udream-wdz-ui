@@ -34,7 +34,7 @@ const d = (a: number, b: number) => ({ distanceMinutes: a, deductionWeight: b })
 const sv = (f: string, v: number[]) => ({ timeField: f, beforeBaseMinutes: v[0], beforeBaseDeductionWeight: v[1], beforeIntervalMinutes: v[2], beforeIntervalDeductionWeight: v[3], afterBaseMinutes: v[4], afterBaseDeductionWeight: v[5], afterIntervalMinutes: v[6], afterIntervalDeductionWeight: v[7] });
 
 export const DEFAULT_PARAMS: Record<string, unknown> = {
-  timeWindowMinutes: 10, orderTimeToleranceMinutes: 5, deduplicationMinutes: 12, shortEventMode: '', shortEventMinutes: '',
+  timeWindowMinutes: 10, orderTimeToleranceMinutes: 5, deduplicationMinutes: 12, shortEventMinutes: 8,
   enableOrderCountLimit: false, enableEventBinding: false, eventBindingThreshold: 0.3,
   windowDiffPerOrder: 1, windowDiffMaxScore: 1.5, nearbyDiffPerOrder: 1, nearbyDiffMaxScore: 1.5, commonDiffPerOrder: 4, commonDiffMaxScore: 6,
   nearbyMinutes: 60, minSampleCount: 5,
@@ -52,7 +52,7 @@ export const DEFAULT_PARAMS: Record<string, unknown> = {
 };
 export const ARRAY_KEYS = [...SECTIONS.flatMap((s) => s.arrays.map((a) => a.key)), BETA_SPEC.key];
 
-/** 编辑器状态 → 后端 detection 结构（数值化；短时事件空=null 跟随全局；风险阈值固定同 v2） */
+/** 编辑器状态 → 后端 detection 结构（数值化；理发时长过滤只传分钟数，后端补 EXCLUDE、空补默认 8；风险阈值固定同 v2） */
 export function toDetection(p: Record<string, unknown>) {
   const num = (k: string) => { const v = Number(p[k]); return Number.isFinite(v) ? v : 0; };
   const rows = (k: string) => ((p[k] as Row[]) || []).map((r) => Object.fromEntries(Object.entries(r).map(([c, v]) => [c, c === 'timeField' ? v : (Number.isFinite(Number(v)) ? Number(v) : 0)])));
@@ -60,7 +60,7 @@ export function toDetection(p: Record<string, unknown>) {
   const smv = sm ? Number(sm) : NaN;
   return {
     timeWindowMinutes: num('timeWindowMinutes'), orderTimeToleranceMinutes: num('orderTimeToleranceMinutes'), deduplicationMinutes: num('deduplicationMinutes'),
-    shortEventMode: (p.shortEventMode as string) || null, shortEventMinutes: Number.isFinite(smv) && smv > 0 ? smv : null,
+    shortEventMode: null, shortEventMinutes: Number.isFinite(smv) && smv > 0 ? smv : null,
     enableOrderCountLimit: !!p.enableOrderCountLimit, enableEventBinding: !!p.enableEventBinding, eventBindingThreshold: num('eventBindingThreshold'),
     windowDiffPerOrder: num('windowDiffPerOrder'), windowDiffMaxScore: num('windowDiffMaxScore'), nearbyDiffPerOrder: num('nearbyDiffPerOrder'), nearbyDiffMaxScore: num('nearbyDiffMaxScore'),
     commonDiffPerOrder: num('commonDiffPerOrder'), commonDiffMaxScore: num('commonDiffMaxScore'), nearbyMinutes: num('nearbyMinutes'), minSampleCount: num('minSampleCount'),
@@ -69,12 +69,12 @@ export function toDetection(p: Record<string, unknown>) {
   };
 }
 
-/** 后端 parameters（或 configJson.detection）→ 编辑器状态：缺的 key 用默认，短时事件先复位 */
+/** 后端 parameters（或 configJson.detection）→ 编辑器状态：缺的 key 用默认（理发时长过滤默认 8） */
 export function fromParameters(src: unknown): Record<string, unknown> {
   let cfg: any = src;
   try { if (typeof src === 'string') cfg = JSON.parse(src); } catch { cfg = null; }
   const s = (cfg && (cfg.detection || cfg)) || {};
-  const out: Record<string, unknown> = { ...DEFAULT_PARAMS, shortEventMode: '', shortEventMinutes: '' };
+  const out: Record<string, unknown> = { ...DEFAULT_PARAMS };
   for (const k of SCALAR_KEYS) if (Object.prototype.hasOwnProperty.call(s, k) && s[k] != null) out[k] = s[k];
   for (const k of ARRAY_KEYS) if (Array.isArray(s[k]) && s[k].length) out[k] = s[k].map((r: Row) => ({ ...r }));
   return out;

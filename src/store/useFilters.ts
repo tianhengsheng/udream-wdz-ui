@@ -4,7 +4,7 @@ import { APP, DEFAULT_END_DATE, DEFAULT_START_DATE } from '../constants/marks';
 import type { ApplicationScope, EventScope, PageRiskEventReq, PrimaryMarkType, ReviewStatus, RiskLevel } from '../types/wdz';
 import type { AreaValue } from '../components/AreaCascade';
 
-/** 私单风险列表筛选条件（对应 v2.js riskFilterPayload + state.selectedRuleId/selectedApplicationScope），三个页签共享应用范围与规则。 */
+/** 私单风险三个页签共用的一份筛选参数（1015：切页签保留已选条件）；各页签只发送自己界面上有的字段。 */
 export interface RiskFilter {
   applicationScope: ApplicationScope;
   area: AreaValue;
@@ -18,6 +18,10 @@ export interface RiskFilter {
   startDate: string | null;
   endDate: string | null;
   eventScope: EventScope;
+  /** 批量核查独有字段，共用同一份以便切页签保留 */
+  lastOperatorName: string;
+  lastMarkStartDate: string | null;
+  lastMarkEndDate: string | null;
   sortField: string | null;
   sortOrder: 'asc' | 'desc';
   pageNum: number;
@@ -27,6 +31,7 @@ export interface RiskFilter {
 export const DEFAULT_RISK_FILTER: RiskFilter = {
   applicationScope: 'ALL', area: {}, storeName: '', riskLevels: [], reviewStatus: '', primaryMarkType: '', secondaryMarkType: '',
   eventId: '', orderNo: '', startDate: DEFAULT_START_DATE, endDate: DEFAULT_END_DATE, eventScope: 'HIT_ONLY',
+  lastOperatorName: '', lastMarkStartDate: null, lastMarkEndDate: null,
   sortField: null, sortOrder: 'desc', pageNum: 1, pageSize: 20,
 };
 

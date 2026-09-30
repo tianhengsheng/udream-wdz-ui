@@ -17,6 +17,8 @@ export const ENV_PRESETS = [
   gw('dev', '开发-newdevi', 'https://api-newdevi.51yxm.com', 'devShared'),
   gw('test', '测试', 'https://m-test2.51yxm.com'),
   gw('newdev', '测试-newdev', 'https://api-newdev.51yxm.com'),
+  // 生产：只读，写接口在 api/client.ts 拦截；账号独立分桶
+  gw('prod', '生产', 'https://api.udream.com'),
 ] as const;
 
 export type EnvKey = (typeof ENV_PRESETS)[number]['key'];

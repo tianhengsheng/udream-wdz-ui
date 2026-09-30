@@ -77,9 +77,8 @@ export function RuleConfigModal({ rule, open, onClose, onSaved }: { rule: Behavi
           <L t="时间窗口"><N p={p} k="timeWindowMinutes" set={set} unit="分" /></L>
           <L t="订单容差"><N p={p} k="orderTimeToleranceMinutes" set={set} unit="分" /></L>
           <L t="去重时间"><N p={p} k="deduplicationMinutes" set={set} unit="分" /></L>
-          {/* 短时事件规则级配置：空=跟随 nacos 全局；显式「关闭」可压过全局启用 */}
-          <L t="短时事件"><Select data-testid="cfg-shortEventMode" size="small" style={{ width: 120 }} value={(p.shortEventMode as string) || ''} options={[{ value: '', label: '跟随全局' }, { value: 'OFF', label: '关闭' }, { value: 'EXCLUDE', label: '不参与计算' }, { value: 'CAP_RISK', label: '后置过滤' }]} onChange={(v) => set('shortEventMode', v)} /></L>
-          <L t="短时阈值"><Input data-testid="cfg-shortEventMinutes" size="small" style={{ width: 70 }} placeholder="全局" value={p.shortEventMinutes == null ? '' : String(p.shortEventMinutes)} onChange={(e) => set('shortEventMinutes', e.target.value)} /><span style={{ color: '#999' }}>分</span></L>
+          {/* 理发时长过滤（1015 原型）：事件时长低于该值不参与计算，默认 8 分钟 */}
+          <L t="理发时长过滤"><Input data-testid="cfg-shortEventMinutes" size="small" style={{ width: 70 }} value={p.shortEventMinutes == null ? '' : String(p.shortEventMinutes)} onChange={(e) => set('shortEventMinutes', e.target.value)} /><span style={{ color: '#999' }}>分</span></L>
         </Space></Card>
         <Card size="small" title="评分配置"><Space wrap size={12}>
           <Checkbox checked={!!p.enableOrderCountLimit} onChange={(e) => set('enableOrderCountLimit', e.target.checked)}>订单数限制</Checkbox>

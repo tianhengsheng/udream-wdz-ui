@@ -55,8 +55,15 @@ async function reloginAndRetry(config?: InternalAxiosRequestConfig): Promise<Axi
   return http(config);
 }
 
+/** 生产环境只读：标记/规则/监测/重算/清理等写接口一律拦截，不发出请求 */
+const PROD_WRITE_APIS = /(submitEventReview|updateEventBusinessStatus|saveBehaviorRule|updateBehaviorRuleStatus|setDefaultBehaviorRule|runBehaviorRuleDetection|saveV2DetectionConfigVersion|setDefaultV2DetectionConfigVersion|refreshDetectionResults|refreshStoreDailyStat|cleanStoreDayData)(\?|$)/;
+
 http.interceptors.request.use(async (cfg) => {
   const s = useSession.getState();
+  if (s.currentEnv === 'prod' && cfg.url && PROD_WRITE_APIS.test(cfg.url)) {
+    message.warning('生产环境只允许查询，已拦截该操作');
+    throw new axios.Cancel('prod read-only');
+  }
   let acc = s.currentUser();
   // 预判式续登：密码账号 token 临近过期(30s)先静默续登
   if (!cfg._skipReauth && acc?.account && acc?.password && acc.expiresAt && acc.expiresAt < Date.now() + 30_000) {
@@ -84,18 +91,19 @@ http.interceptors.response.use(
         if (TOKEN_EXPIRY_CODES.has(String(c))) {
           const retried = await reloginAndRetry(res.config);
           if (retried) return retried;
-          showTokenExpired(res.config?.url, undefined, body.retInfo || body.msg);
+          showTokenExpired(res.config?.url, undefined, body.retMsg || body.retInfo || body.msg);
           return Promise.reject(body);
         }
         // eslint-disable-next-line no-console
         console.warn('[resp.biz-fail]', res.config.url, body);
-        if (!res.config._silent) message.error(`[${c}] ${body.retInfo || body.msg || '业务异常'}`);
+        if (!res.config._silent) message.error(`[${c}] ${body.retMsg || body.retInfo || body.msg || '业务异常'}`);
         return Promise.reject(body);
       }
     }
     return res;
   },
   async (err) => {
+    if (axios.isCancel(err)) return Promise.reject(err); // 生产只读拦截等主动取消，已提示过
     const status = err?.response?.status;
     // eslint-disable-next-line no-console
     if (!err?.config?._silent) console.error('[resp.err]', err?.config?.url, status, err?.response?.data);
@@ -105,7 +113,7 @@ http.interceptors.response.use(
         if (retried) return retried;
       }
       const body = err?.response?.data;
-      showTokenExpired(err?.config?.url, status, body && (body.retInfo || body.msg || body.message));
+      showTokenExpired(err?.config?.url, status, body && (body.retMsg || body.retInfo || body.msg || body.message));
     } else if (!err?.config?._silent) {
       message.error(`[${status || 'NET'}] ${err?.message || '网络异常'}`);
     }

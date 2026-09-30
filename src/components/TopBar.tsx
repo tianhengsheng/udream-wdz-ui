@@ -3,6 +3,8 @@ import { Alert, Button, Descriptions, Input, Modal, Popover, Radio, Space, Tabs,
 import dayjs from 'dayjs';
 import { DeleteOutlined, DownloadOutlined, GlobalOutlined, PlusOutlined, UploadOutlined, UserOutlined } from '@ant-design/icons';
 import { useSession, type Account, type AccountSnapshot } from '../store/useSession';
+import { useDialogs } from '../store/useDialogs';
+import { useFilters } from '../store/useFilters';
 import { ENV_PRESETS } from '../envs';
 import { decodeAtToken, isAtTokenExpired, type DecodedAtToken } from '../utils/jwt';
 import { loginPc } from '../api/auth';
@@ -70,7 +72,12 @@ export function TopBar() {
   };
 
   const envContent = (
-    <Radio.Group value={currentEnv} onChange={(e) => { setCurrentEnv(e.target.value); message.success(`已切到 ${ENV_PRESETS.find((p) => p.key === e.target.value)?.label}`); }}>
+    <Radio.Group value={currentEnv} onChange={(e) => {
+      // 事件ID只在各自环境有效：切环境时关掉事件相关的弹窗/抽屉，并让当前列表按新环境重查，避免拿旧环境的事件去新环境查
+      useDialogs.setState({ detailEventId: null, reviewEvents: null, reviewModify: null, recordsEventId: null, attendanceEventId: null, ordersEventId: null });
+      setCurrentEnv(e.target.value);
+      // 默认规则ID各环境不同（本地 2 / 生产 1…），先按新环境重取再刷新，否则详情/排队订单按旧 ruleId 查不到
+      useFilters.getState().loadRule().finally(() => useDialogs.getState().bumpRefresh()); message.success(`已切到 ${ENV_PRESETS.find((p) => p.key === e.target.value)?.label}`); }}>
       <Space direction="vertical" size={4}>
         {ENV_PRESETS.map((e) => (
           <Radio key={e.key} value={e.key}><Space size={6}><strong>{e.label}</strong><span style={{ color: '#999', fontSize: 12 }}>{e.target}</span></Space></Radio>

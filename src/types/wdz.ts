@@ -16,13 +16,14 @@ export interface RuleOption { id: string; ruleCode: string; ruleName: string; is
 export interface RiskSummary {
   totalCount: number; highCount: number; mediumCount: number; lowCount: number; warningCount: number;
   unverifiedCount: number; privateOrderCount: number; safeCount: number; unmarkedCount: number;
+  detectedCount: number; reviewedCount: number; noRiskCount: number; duplicateEventCount: number; invalidEventCount: number; nonCompliantCount: number; mutualCutCount: number; shortTermReworkCount: number;
   dataUpdateTime?: string;
 }
 
 export interface EventOrder {
   reviewId?: string; eventId?: string; matchType?: string;
   orderId: string; orderNo: string; serviceItemName?: string; itemCategory?: number; orderAmount?: number;
-  craftsmanId?: string; craftsmanName?: string; orderStatus?: string; queuedNo?: string;
+  craftsmanId?: string; craftsmanName?: string; orderStatus?: string; queuedNo?: string; payTime?: string;
   orderCreateTime?: string; serviceStartTime?: string; correctedStartTime?: string; serviceEndTime?: string;
   serviceDurationSeconds?: number; correctedDurationSeconds?: number; totalDurationSeconds?: number; weightFactor?: number;
   craftsmanEmployeeNo?: string; craftsmanNickName?: string; craftsmanAvatarUrl?: string;
@@ -57,7 +58,9 @@ export interface RiskWindow {
 }
 
 export interface StoreRanking {
-  cityName?: string; cityManagerName?: string; regionManagerName?: string; storeId?: string; storeName?: string;
+  cityName?: string; cityManagerName?: string; regionManagerName?: string; storeId?: string; storeName?: string; statDate?: string;
+  detectedCount?: number; reviewedCount?: number; noRiskCount?: number; duplicateEventCount?: number; invalidEventCount?: number;
+  nonCompliantCount?: number; mutualCutCount?: number; shortTermReworkCount?: number;
   totalCount: number; highCount: number; mediumCount: number; lowCount: number; warningCount: number;
   dyeEventCount: number; normalEventCount: number; privateOrderCount: number;
   totalOrderCount: number; normalOrderCount: number; dyeOrderCount: number;
@@ -66,9 +69,11 @@ export interface StoreRanking {
 export interface ReviewRecord {
   id: string; reviewId?: string; eventId: string; actionType?: string; beforeStatus?: string; afterStatus?: string;
   primaryMarkType?: PrimaryMarkType; secondaryMarkType?: string; markedOrderId?: string; markedOrderNo?: string;
-  markedCraftsmanId?: string; markedCraftsmanName?: string; remark?: string; operatorId?: string; operatorName?: string; createTime?: string;
+  markedCraftsmanId?: string; markedCraftsmanName?: string; markedTargetType?: 'ORDER' | 'CRAFTSMAN'; craftsmanMarkCount?: number; remark?: string; operatorId?: string; operatorName?: string; createTime?: string;
   cityName?: string; cityManagerName?: string; regionManagerName?: string; storeId?: string; storeName?: string;
   workName?: string; serviceType?: string; checkType?: string; eventTime?: string; imageUrl?: string; deviceId?: string; deviceName?: string;
+  /** 是否可修改标记：事件当前生效的初核/复核记录 */
+  editable?: boolean;
 }
 
 export interface EventDetail {
@@ -117,6 +122,7 @@ export interface PageReviewRecordReq {
   app: string; pageNum: number; pageSize: number; eventId?: string | null; operatorName?: string; reviewStatus?: string; actionType?: string;
   storeName?: string; primaryMarkType?: string; secondaryMarkType?: string; city?: string | null; cityManagerId?: string | null; orgIds?: string | null;
   eventStartDate?: string | null; eventEndDate?: string | null; operationStartDate?: string | null; operationEndDate?: string | null; logScope?: 'all' | 'latest';
+  sortField?: string; sortOrder?: 'asc' | 'desc';
 }
 export interface PageRuleReq { app: string; pageNum: number; pageSize: number; ruleName?: string; ruleType?: string; enabled?: boolean | null; isDefault?: boolean | null; applicationScope?: string; createStartDate?: string | null; createEndDate?: string | null }
 export interface SaveRuleReq { app: string; id?: string | null; ruleCode?: string; ruleName: string; ruleType: string; applicationScope: ApplicationScope; description?: string; enabled?: boolean; weight?: number; parameters?: Record<string, unknown>; paramsJson?: string; version?: number }

@@ -5,15 +5,19 @@ import type { RiskEvent } from '../types/wdz';
  * 全局弹窗状态：详情/标记/操作记录/打卡/排队订单抽屉 由 GlobalDialogs 统一挂载，任何列表只需 open*。
  * refreshTick：标记提交成功后 +1，各列表 effect 订阅它重新拉数（对应 v2 submitReview 后的多处刷新）。
  */
+export interface ReviewModify { reviewType: 'FIRST_REVIEW' | 'SECOND_REVIEW'; remark?: string }
+
 interface DialogState {
   detailEventId: string | null;
   reviewEvents: RiskEvent[] | null;
+  /** 核查日志「修改标记」：核实类型固定取日志行 actionType，备注回显原记录 */
+  reviewModify: ReviewModify | null;
   recordsEventId: string | null;
   attendanceEventId: string | null;
   ordersEventId: string | null;
   refreshTick: number;
   openDetail: (eventId: string) => void;
-  openReview: (events: RiskEvent[]) => void;
+  openReview: (events: RiskEvent[], modify?: ReviewModify) => void;
   openRecords: (eventId: string) => void;
   openAttendance: (eventId: string) => void;
   openOrders: (eventId: string | null) => void;
@@ -22,13 +26,13 @@ interface DialogState {
 }
 
 export const useDialogs = create<DialogState>()((set) => ({
-  detailEventId: null, reviewEvents: null, recordsEventId: null, attendanceEventId: null, ordersEventId: null, refreshTick: 0,
+  detailEventId: null, reviewEvents: null, reviewModify: null, recordsEventId: null, attendanceEventId: null, ordersEventId: null, refreshTick: 0,
   openDetail: (eventId) => set({ detailEventId: String(eventId) }),
-  openReview: (events) => set({ reviewEvents: events }),
+  openReview: (events, modify) => set({ reviewEvents: events, reviewModify: modify ?? null }),
   openRecords: (eventId) => set({ recordsEventId: String(eventId) }),
   openAttendance: (eventId) => set({ attendanceEventId: String(eventId) }),
   openOrders: (eventId) => set({ ordersEventId: eventId == null ? null : String(eventId) }),
-  close: (k) => set(k === 'detail' ? { detailEventId: null } : k === 'review' ? { reviewEvents: null } : k === 'records' ? { recordsEventId: null } : k === 'attendance' ? { attendanceEventId: null } : { ordersEventId: null }),
+  close: (k) => set(k === 'detail' ? { detailEventId: null } : k === 'review' ? { reviewEvents: null, reviewModify: null } : k === 'records' ? { recordsEventId: null } : k === 'attendance' ? { attendanceEventId: null } : { ordersEventId: null }),
   bumpRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
 }));
 

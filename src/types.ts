@@ -1,9 +1,10 @@
-// udream Resp 真实字段：{ success, retCode, subCode, retInfo, result }；兼容旧 { code, msg, data }
+// udream Resp 真实字段：{ success, retCode, subCode, retMsg(部分服务 retInfo), result }；兼容旧 { code, msg, data }
 export interface Resp<T> {
   success?: boolean;
   retCode?: string;
   subCode?: string;
   retInfo?: string;
+  retMsg?: string;
   result?: T;
   code?: string | number;
   msg?: string;

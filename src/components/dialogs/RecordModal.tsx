@@ -13,8 +13,9 @@ export const recordCols: TableColumnsType<ReviewRecord> = [
   { title: '核实状态', dataIndex: 'actionType', width: 70, render: (v) => ACTION_LABELS[v] || v || '-' },
   { title: '标记类型一级', dataIndex: 'primaryMarkType', width: 110, render: (v) => PRIMARY_LABELS[v] || '-' },
   { title: '标记类型二级', dataIndex: 'secondaryMarkType', width: 150, render: dash },
-  { title: '标记订单', dataIndex: 'markedOrderNo', width: 150, render: dash },
-  { title: '标记发型师', dataIndex: 'markedCraftsmanName', width: 90, render: dash },
+  { title: '关联类型', dataIndex: 'markedTargetType', width: 80, render: (v) => ({ ORDER: '订单', CRAFTSMAN: '发型师' } as Record<string, string>)[v] || '-' },
+  { title: '关联订单', dataIndex: 'markedOrderNo', width: 150, render: dash },
+  { title: '关联发型师', dataIndex: 'markedCraftsmanName', width: 90, render: dash },
   { title: '备注', dataIndex: 'remark', render: dash },
 ];
 

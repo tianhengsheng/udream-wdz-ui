@@ -3,6 +3,7 @@ import { Button, Card, Descriptions, Modal, Space, Table, Tag, type TableColumns
 import { getRiskEventDetail } from '../../api/wdz';
 import { DyeTag, PrimaryTag, ReviewTag, RiskTag } from '../../components/Tags';
 import { MediaThumb } from '../../components/MediaThumb';
+import { END_TIME_TITLE, endTimeCell } from '../../components/EndTimeCell';
 import { useFilters } from '../../store/useFilters';
 import { useDialogs } from '../../store/useDialogs';
 import { openMonitor } from '../../utils/monitor';
@@ -21,7 +22,7 @@ const orderCols: TableColumnsType<EventOrder> = [
   { title: '创建时间', dataIndex: 'orderCreateTime', width: 150, render: fmtTime },
   { title: '开始时间', dataIndex: 'serviceStartTime', width: 150, render: fmtTime },
   { title: '矫正开始', dataIndex: 'correctedStartTime', width: 150, render: fmtTime },
-  { title: '结束时间', dataIndex: 'serviceEndTime', width: 150, render: fmtTime },
+  { title: END_TIME_TITLE, dataIndex: 'serviceEndTime', width: 170, render: (_, o) => endTimeCell(o) },
   { title: '服务时长', dataIndex: 'serviceDurationSeconds', width: 90, render: duration },
   { title: '矫正时长', dataIndex: 'correctedDurationSeconds', width: 90, render: duration },
   { title: '总时长', dataIndex: 'totalDurationSeconds', width: 90, render: duration },

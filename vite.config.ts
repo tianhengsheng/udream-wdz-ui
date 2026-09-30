@@ -3,7 +3,8 @@ import react from '@vitejs/plugin-react';
 import { ENV_PRESETS } from './src/envs';
 
 // 每个环境预设：先注册 serviceOverrides 细粒度规则（/env/{key}{prefix}，http-proxy 按 key 长度长的优先匹配），再注册 catch-all /env/{key}。
-// 剥上下行 cookie（避免 localhost 域残留 cookie 污染网关鉴权 50130）。
+// 剥上下行 cookie（避免 localhost 域残留 cookie 污染网关鉴权 50130）；
+// 剥 Origin/Referer：生产网关 CORS 白名单无 localhost，带 Origin 直接 403（代理后本就同源，无需跨域）。
 export default defineConfig(() => {
   const proxy: Record<string, any> = {};
   const build = (e: { key: string; target: string }, pathPrefix: string) => ({
@@ -15,7 +16,7 @@ export default defineConfig(() => {
         return pathPrefix ? `${pathPrefix}${stripped}` : stripped;
       },
       configure: (p: any) => {
-        p.on('proxyReq', (req: any) => req.removeHeader('cookie'));
+        p.on('proxyReq', (req: any) => { req.removeHeader('cookie'); req.removeHeader('origin'); req.removeHeader('referer'); });
         p.on('proxyRes', (res: any) => {
           const sc = res.headers['set-cookie'];
           if (sc) {

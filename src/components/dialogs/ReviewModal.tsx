@@ -11,12 +11,12 @@ const SAFE_TYPES = ['NO_RISK', 'INVALID_EVENT', 'DUPLICATE_EVENT', 'STYLIST_MUTU
 /**
  * 标记核实弹窗（对应 v2 openReviewModal/submitReview）。
  * - 私单：二级类型必选 + 归属二选一（关联订单 / 发型师，只发当前模式一侧）+ 备注必填
- * - 无风险类：六种结论，二级取一级同名文案；只有 NO_RISK 要填备注
+ * - 无风险类：六种结论，二级取一级同名文案；均可填备注，只有 NO_RISK 必填
  * - 批量归属只支持同门店同一天；否则两侧不可选、不强校验
  * - 按 nextReviewType 分组提交（初核/复核各一次请求），成功后 bumpRefresh 通知各列表
  */
 export function ReviewModal() {
-  const { reviewEvents: events, close, bumpRefresh } = useDialogs();
+  const { reviewEvents: events, reviewModify: modify, close, bumpRefresh } = useDialogs();
   const ruleId = useFilters((s) => s.ruleId);
   const open = !!events?.length;
   const first = events?.[0];
@@ -38,7 +38,9 @@ export function ReviewModal() {
     const scopes = new Set(events.map((e) => `${e.storeName || ''}|${String(e.eventTime || '').slice(0, 10)}`));
     return scopes.size === 1 && events.every((e) => e.storeName && e.eventTime);
   }, [events]);
-  const reviewTypes = useMemo(() => Array.from(new Set((events || []).map(nextReviewType))), [events]);
+  // 修改标记沿用原记录的核实类型，不按事件状态推导
+  const typeOf = (e: RiskEvent) => modify?.reviewType ?? nextReviewType(e);
+  const reviewTypes = useMemo(() => Array.from(new Set((events || []).map(typeOf))), [events, modify]);
 
   useEffect(() => {
     if (!open || !first) return;
@@ -50,7 +52,7 @@ export function ReviewModal() {
     setTarget(first.markedCraftsmanId && !first.markedOrderId && !first.markedOrderNo ? 'craftsman' : 'order');
     setOrderKey(first.markedOrderId ? `窗口内订单:${first.markedOrderId}` : undefined);
     setCraftsmanId(first.markedCraftsmanId ? String(first.markedCraftsmanId) : undefined);
-    setRemark('');
+    setRemark(modify?.remark || '');
     setOrders([]); setCraftsmen([]);
     if (!scoped) return;
     setLoadingOpts(true);
@@ -68,6 +70,7 @@ export function ReviewModal() {
   const pickedOrder = allOrders.find((o) => String(o.orderId) === (orderKey || '').split(':').pop());
   const pickedCraftsman = craftsmen.find((c) => String(c.craftsmanId) === craftsmanId);
   const needRemark = mode === 'private' || (mode === 'safe' && safeType === 'NO_RISK');
+  const showRemark = mode === 'private' || (mode === 'safe' && !!safeType);
 
   const submit = async () => {
     if (!events?.length) return;
@@ -87,14 +90,14 @@ export function ReviewModal() {
       if (safeType === 'NO_RISK' && !remark.trim()) { message.error('备注信息不能为空'); return; }
     }
     const groups = new Map<string, { eventId: string; version?: number }[]>();
-    events.forEach((e) => { const t = nextReviewType(e); if (!groups.has(t)) groups.set(t, []); groups.get(t)!.push({ eventId: String(e.eventId), version: e.version }); });
+    events.forEach((e) => { const t = typeOf(e); if (!groups.has(t)) groups.set(t, []); groups.get(t)!.push({ eventId: String(e.eventId), version: e.version }); });
     const common = {
       app: APP, primaryMarkType, secondaryMarkType, ruleId,
       markedOrderId: target === 'order' && pickedOrder ? String(pickedOrder.orderId) : undefined,
       markedOrderNo: target === 'order' && pickedOrder ? pickedOrder.orderNo : undefined,
       markedCraftsmanId: target === 'craftsman' && pickedCraftsman ? String(pickedCraftsman.craftsmanId) : undefined,
       markedCraftsmanName: target === 'craftsman' && pickedCraftsman ? pickedCraftsman.craftsmanName : undefined,
-      remark: needRemark ? remark.trim() : undefined,
+      remark: showRemark ? remark.trim() || undefined : undefined,
     };
     setSubmitting(true);
     try {
@@ -107,7 +110,7 @@ export function ReviewModal() {
   };
 
   return (
-    <Modal title={events && events.length > 1 ? `批量标记核实（${events.length}条）` : '标记核实'} open={open} onCancel={() => close('review')} onOk={submit} okText="确定" confirmLoading={submitting} width={620} destroyOnHidden data-testid="review-modal">
+    <Modal title={modify ? '修改标记' : events && events.length > 1 ? `批量标记核实（${events.length}条）` : '标记核实'} open={open} onCancel={() => close('review')} onOk={submit} okText="确定" confirmLoading={submitting} width={620} destroyOnHidden data-testid="review-modal">
       {events && (
         <Space direction="vertical" size={10} style={{ display: 'flex' }}>
           <div style={{ color: '#666' }}>已选择 {events.length} 个事件：{events.map((e) => `#${e.eventId}`).join('、')}</div>
@@ -140,8 +143,8 @@ export function ReviewModal() {
           {mode === 'safe' && (
             <div>选择类型 <span style={{ color: 'red' }}>*</span>　<Select data-testid="review-safe-type" style={{ width: 220 }} placeholder="请选择" value={safeType || undefined} options={SAFE_TYPES.map((v) => ({ value: v, label: PRIMARY_LABELS[v] }))} onChange={setSafeType} /></div>
           )}
-          {needRemark && (
-            <div>备注信息 <span style={{ color: 'red' }}>*</span><Input.TextArea data-testid="review-remark" rows={3} maxLength={500} showCount placeholder="请输入备注信息" value={remark} onChange={(e) => setRemark(e.target.value)} /></div>
+          {showRemark && (
+            <div>备注信息 {needRemark && <span style={{ color: 'red' }}>*</span>}<Input.TextArea data-testid="review-remark" rows={3} maxLength={500} showCount placeholder={needRemark ? '请输入备注信息' : '选填'} value={remark} onChange={(e) => setRemark(e.target.value)} /></div>
           )}
         </Space>
       )}
