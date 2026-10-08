@@ -335,7 +335,8 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
               <div style={{ position: 'absolute', left: x(cur.t - params.nearby), width: x(cur.t + params.nearby) - x(cur.t - params.nearby), top: 0, bottom: 0, background: 'rgba(22,119,255,0.06)' }} />
               <div style={{ position: 'absolute', left: x(windowStart), width: x(windowStart + params.window) - x(windowStart), top: 0, bottom: 0, background: 'rgba(250,173,20,0.18)' }} />
               {cur.dur ? <div style={{ position: 'absolute', left: x(cur.t - cur.dur / 60), top: 0, bottom: 0, borderLeft: '1px dashed #f5222d' }} /> : null}
-              <div style={{ position: 'absolute', left: x(cur.t), top: 0, bottom: 0, borderLeft: '1px dashed #f5222d' }} />
+              {/* 1px 线向左收 1px，与开始线一样贴在色块边缘内侧 */}
+              <div style={{ position: 'absolute', left: x(cur.t) - 1, top: 0, bottom: 0, borderLeft: '1px dashed #f5222d' }} />
             </div>
           )}
           {/* 时间刻度 */}
