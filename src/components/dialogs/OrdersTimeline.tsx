@@ -256,7 +256,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
 
   const laneBlock = (name: string, rowCount: number, children: React.ReactNode, key: string, tint?: string, privateLane = false, rowH = ROW_H) => (
     <div key={key} style={{ display: 'flex', borderBottom: '1px solid #f0f0f0', background: tint }}>
-      <div style={{ width: LABEL_W, flex: 'none', position: 'sticky', left: 0, zIndex: 3, background: tint || '#fff', padding: '0 6px', fontSize: 12, lineHeight: `${rowH}px`, borderRight: '1px solid #f0f0f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      <div style={{ width: LABEL_W, boxSizing: 'border-box', flex: 'none', position: 'sticky', left: 0, zIndex: 3, background: tint || '#fff', padding: '0 6px', fontSize: 12, lineHeight: `${rowH}px`, borderRight: '1px solid #f0f0f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         color: privateLane ? PRIVATE_COLOR : undefined, fontWeight: privateLane ? 600 : undefined }} title={name}>{privateLane ? <PrivateMark /> : null}{name}</div>
       <div style={{ position: 'relative', width, height: rowCount * rowH, flex: 'none' }}>{children}</div>
     </div>
@@ -277,7 +277,9 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
     ['事件', [item(RED, '高/私单'), item(ORANGE, '中'), item(GREEN, '预警/低/无风险/不合规'), item(GREY, '无效/互剪/重修/重复')]],
     ['订单', [item(ORDER_WINDOW, '窗口'), item(ORDER_NEAR, '附近'), item(ORDER_OTHER, '其他计算'), item(ORDER_OFF, '不参与计算'), item('#bbb', '排队等待', 2), item('#000', '支付', 10, 2)]],
     ['标记', [item(MARK_FG.private, '私单'), item(MARK_FG.kept, '无风险/不合规'), item(MARK_FG.dropped, '互剪/重修/无效/重复'), item('#722ed1', '烫染'), item(MULTI_COLOR, '多项目'), linkItem(false, '标记关联订单'), linkItem(true, '备注订单')]],
-    ['底色', [item('rgba(250,173,20,0.35)', `窗口 ${params.window}′`), item('rgba(22,119,255,0.18)', `附近 ±${params.nearby}′`), item('#f5222d', '当前事件', 10, 2)]],
+    ['底色', [item('rgba(250,173,20,0.35)', `窗口 ${params.window}′`), item('rgba(22,119,255,0.18)', `附近 ±${params.nearby}′`), <span key="cur" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span style={{ width: 14, display: 'inline-flex', justifyContent: 'center' }}><i style={{ height: 10, borderLeft: '1px dashed #f5222d' }} /></span>当前事件起止
+    </span>]],
   ];
 
   // 连线坐标：按泳道累计高度（每条泳道底边 1px），事件取色块/小字下方中点，订单取服务条上边中点
@@ -333,7 +335,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
               <div style={{ position: 'absolute', left: x(cur.t - params.nearby), width: x(cur.t + params.nearby) - x(cur.t - params.nearby), top: 0, bottom: 0, background: 'rgba(22,119,255,0.06)' }} />
               <div style={{ position: 'absolute', left: x(windowStart), width: x(windowStart + params.window) - x(windowStart), top: 0, bottom: 0, background: 'rgba(250,173,20,0.18)' }} />
               {cur.dur ? <div style={{ position: 'absolute', left: x(cur.t - cur.dur / 60), top: 0, bottom: 0, borderLeft: '1px dashed #f5222d' }} /> : null}
-              <div style={{ position: 'absolute', left: x(cur.t), top: 0, bottom: 0, borderLeft: '2px solid #f5222d' }} />
+              <div style={{ position: 'absolute', left: x(cur.t), top: 0, bottom: 0, borderLeft: '1px dashed #f5222d' }} />
             </div>
           )}
           {/* 时间刻度 */}
