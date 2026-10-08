@@ -50,7 +50,11 @@ const MULTI_COLOR = '#c41d7f';
 const MultiMark = () => <span style={{ fontSize: 9, lineHeight: '12px', padding: '0 2px', marginRight: 2, background: MULTI_COLOR, color: '#fff', borderRadius: 2 }}>多</span>;
 /** 订单泳道含烫染/多项目单时加高，给条下方的标识留位 */
 const OD_DYE_ROW_H = 34;
-const hasOrderTag = (o: EventOrder) => isDyeOrder(o) || isMultiOrder(o);
+/** 纯洗吹单（含「洗」不含「剪」、非烫染）：大多不上报 AI 事件，条变淡并加「洗」字 */
+const isWashOrder = (o: EventOrder) => !isDyeOrder(o) && /洗|冲/.test(o.serviceItemName || '') && !/剪/.test(o.serviceItemName || '');
+const WASH_COLOR = '#4096ff';
+const WashMark = () => <span style={{ fontSize: 9, lineHeight: '12px', padding: '0 2px', marginRight: 2, background: WASH_COLOR, color: '#fff', borderRadius: 2 }}>洗</span>;
+const hasOrderTag = (o: EventOrder) => isDyeOrder(o) || isMultiOrder(o) || isWashOrder(o);
 const orderRowH = (lane: Lane<OrderBar>) => (lane.rows.some((r) => r.some((b) => hasOrderTag(b.o))) ? OD_DYE_ROW_H : ROW_H);
 
 interface Lane<T> { name: string; rows: T[][] }
@@ -233,7 +237,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
           return <div key={l.eventId} style={{ color: '#ffd666' }}>关联事件 #{l.eventId} · {MARK_STYLES[e?.primaryMarkType || '']?.text || '未标记'} · 来自{l.source === 'mark' ? '标记' : '备注'}</div>;
         })}
         <div><b>{b.o.queuedNo || '-'}</b> · {b.o.craftsmanName || '-'} · {b.o.orderStatus || '-'}{match ? ` · ${match}` : ''}</div>
-        <div>{isDyeOrder(b.o) ? <><DyeText /> · </> : null}{isMultiOrder(b.o) ? <><span style={{ color: '#ff85c0', fontWeight: 600 }}>{itemCount(b.o)}项</span> · </> : null}{b.o.serviceItemName || '-'} · {money(b.o.orderAmount)}</div>
+        <div>{isDyeOrder(b.o) ? <><DyeText /> · </> : null}{isWashOrder(b.o) ? <><span style={{ color: '#69b1ff', fontWeight: 600 }}>洗吹</span> · </> : null}{isMultiOrder(b.o) ? <><span style={{ color: '#ff85c0', fontWeight: 600 }}>{itemCount(b.o)}项</span> · </> : null}{b.o.serviceItemName || '-'} · {money(b.o.orderAmount)}</div>
         <div>排队 {hm(b.o.orderCreateTime)} → 服务 {hm(b.o.serviceStartTime)}{corrected} ~ {hm(b.o.serviceEndTime)}</div>
         {b.o.payTime && <div>支付 {hm(b.o.payTime)}</div>}
         <div style={{ color: '#aaa' }}>{b.o.orderNo || ''}</div>
@@ -276,7 +280,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
   const legendRows: [string, React.ReactNode[]][] = [
     ['事件', [item(RED, '高/私单'), item(ORANGE, '中'), item(GREEN, '预警/低/无风险/不合规'), item(GREY, '无效/互剪/重修/重复')]],
     ['订单', [item(ORDER_WINDOW, '窗口'), item(ORDER_NEAR, '附近'), item(ORDER_OTHER, '其他计算'), item(ORDER_OFF, '不参与计算'), item('#bbb', '排队等待', 2), item('#000', '支付', 10, 2)]],
-    ['标记', [item(MARK_FG.private, '私单'), item(MARK_FG.kept, '无风险/不合规'), item(MARK_FG.dropped, '互剪/重修/无效/重复'), item('#722ed1', '烫染'), item(MULTI_COLOR, '多项目'), linkItem(false, '标记关联订单'), linkItem(true, '备注订单')]],
+    ['标记', [item(MARK_FG.private, '私单'), item(MARK_FG.kept, '无风险/不合规'), item(MARK_FG.dropped, '互剪/重修/无效/重复'), item('#722ed1', '烫染'), item(MULTI_COLOR, '多项目'), item(WASH_COLOR, '洗吹(条变淡)'), linkItem(false, '标记关联订单'), linkItem(true, '备注订单')]],
     ['底色', [item('rgba(250,173,20,0.35)', `窗口 ${params.window}′`), item('rgba(22,119,255,0.18)', `附近 ±${params.nearby}′`), <span key="cur" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
       <span style={{ width: 14, display: 'inline-flex', justifyContent: 'center' }}><i style={{ height: 10, borderLeft: '1px dashed #f5222d' }} /></span>当前事件起止
     </span>]],
@@ -378,13 +382,13 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
                   )}
                   {b.start != null && (
                     <div style={{ position: 'absolute', left: x(b.start) - x(b.from), width: Math.max(3, x(b.end ?? b.start + 1) - x(b.start)), top: 5, height: ROW_H - 10, background: color, borderRadius: 2,
-                      opacity: calc ? 1 : 0.7, fontSize: 10, color: '#fff', overflow: 'hidden', whiteSpace: 'nowrap', lineHeight: `${ROW_H - 10}px`, paddingLeft: 2 }}>
+                      opacity: isWashOrder(b.o) ? 0.4 : calc ? 1 : 0.7, fontSize: 10, color: '#fff', overflow: 'hidden', whiteSpace: 'nowrap', lineHeight: `${ROW_H - 10}px`, paddingLeft: 2 }}>
                       {x(b.end ?? b.start) - x(b.start) > 36 ? (b.o.queuedNo || '') : ''}
                     </div>
                   )}
                   {b.start == null && <div style={{ position: 'absolute', left: 0, width: 6, top: 7, height: ROW_H - 14, border: `1px dashed ${color}`, borderRadius: 2 }} />}
                   {b.pay != null && <div style={{ position: 'absolute', left: x(b.pay) - x(b.from), top: 3, height: ROW_H - 6, borderLeft: '2px solid #000' }} />}
-                  {hasOrderTag(b.o) && <div style={{ position: 'absolute', left: sx + sw / 2, top: ROW_H - 3, transform: 'translateX(-50%)', lineHeight: '12px', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{isDyeOrder(b.o) ? <DyeMark /> : null}{isMultiOrder(b.o) ? <MultiMark /> : null}</div>}
+                  {hasOrderTag(b.o) && <div style={{ position: 'absolute', left: sx + sw / 2, top: ROW_H - 3, transform: 'translateX(-50%)', lineHeight: '12px', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{isDyeOrder(b.o) ? <DyeMark /> : null}{isWashOrder(b.o) ? <WashMark /> : null}{isMultiOrder(b.o) ? <MultiMark /> : null}</div>}
                 </div>
               </Tooltip>
             );
