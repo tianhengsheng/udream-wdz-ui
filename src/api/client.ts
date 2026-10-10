@@ -55,8 +55,8 @@ async function reloginAndRetry(config?: InternalAxiosRequestConfig): Promise<Axi
   return http(config);
 }
 
-/** 生产环境只读：标记/规则/监测/重算/清理等写接口一律拦截，不发出请求 */
-const PROD_WRITE_APIS = /(submitEventReview|updateEventBusinessStatus|saveBehaviorRule|updateBehaviorRuleStatus|setDefaultBehaviorRule|runBehaviorRuleDetection|saveV2DetectionConfigVersion|setDefaultV2DetectionConfigVersion|refreshDetectionResults|refreshStoreDailyStat|cleanStoreDayData)(\?|$)/;
+/** 生产环境只读：规则/监测/重算/清理等写接口一律拦截，不发出请求；标记（submitEventReview）已放开 */
+const PROD_WRITE_APIS = /(updateEventBusinessStatus|saveBehaviorRule|updateBehaviorRuleStatus|setDefaultBehaviorRule|runBehaviorRuleDetection|saveV2DetectionConfigVersion|setDefaultV2DetectionConfigVersion|refreshDetectionResults|refreshStoreDailyStat|cleanStoreDayData)(\?|$)/;
 
 http.interceptors.request.use(async (cfg) => {
   const s = useSession.getState();
