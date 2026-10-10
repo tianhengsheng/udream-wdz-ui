@@ -29,7 +29,7 @@ export interface RiskFilter {
 }
 
 export const DEFAULT_RISK_FILTER: RiskFilter = {
-  applicationScope: 'ALL', area: {}, storeName: '', riskLevels: [], reviewStatus: '', primaryMarkType: '', secondaryMarkType: '',
+  applicationScope: 'ALL', area: {}, storeName: '', riskLevels: ['HIGH', 'MEDIUM'], reviewStatus: '', primaryMarkType: '', secondaryMarkType: '',
   eventId: '', orderNo: '', startDate: DEFAULT_START_DATE, endDate: DEFAULT_END_DATE, eventScope: 'HIT_ONLY',
   lastOperatorName: '', lastMarkStartDate: null, lastMarkEndDate: null,
   sortField: null, sortOrder: 'desc', pageNum: 1, pageSize: 20,

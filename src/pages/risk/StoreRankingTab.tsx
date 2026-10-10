@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Button, Card, DatePicker, Input, Space, Table, Tooltip, message, type TableColumnsType } from 'antd';
+import { useEffect, useRef, useState } from 'react';
+import { Button, Card, DatePicker, Input, Modal, Pagination, Space, Table, Tooltip, message, type TableColumnsType } from 'antd';
 import dayjs from 'dayjs';
 import { exportStoreRanking, getStoreRankingSummary, pageStoreRanking } from '../../api/wdz';
 import { AreaCascade } from '../../components/AreaCascade';
@@ -20,7 +20,7 @@ const COLS: [string, keyof StoreRanking][] = [
   ['订单数', 'totalOrderCount'], ['普通订单数', 'normalOrderCount'], ['烫染订单数', 'dyeOrderCount'],
 ];
 
-/** 门店排行页签：服务端分页/排序（降→升→取消），事件日期跨度 ≤2 个月（62 天，与后端一致）；订单三列来自后端快照/降级，前端不聚合 */
+/** 门店排行页签：服务端分页/排序（降→升→取消），事件日期跨度 ≤2 个月（62 天，与后端一致）；后端按 rankingSource 读实时或日快照（只到昨天） */
 export function StoreRankingTab({ active }: { active: boolean }) {
   // 区域/门店/日期读写三个页签共用的 useFilters.risk；排行不支持的事件级条件不发送（后端也会忽略）
   const { risk, setRisk, resetRisk } = useFilters();
@@ -33,6 +33,8 @@ export function StoreRankingTab({ active }: { active: boolean }) {
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState<RiskSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  // 实时/快照比对：第一次点记录基准，切换 Nacos rankingSource 后再点比对（同参数逐行逐列）
+  const baseline = useRef<{ key: string; rows: Map<string, StoreRanking> } | null>(null);
   const [queueStore, setQueueStore] = useState<string | null>(null);
   const validRange = () => {
     const { startDate: s, endDate: e } = useFilters.getState().risk; if (!s || !e) return true;
@@ -74,7 +76,7 @@ export function StoreRankingTab({ active }: { active: boolean }) {
       title, dataIndex, width, ellipsis: { showTitle: false }, render: (v: string) => <Tooltip title={v} placement="topLeft"><span>{v || '-'}</span></Tooltip>,
     })),
     ...COLS.map(([label, key]) => ({ title: th(label, key), dataIndex: key, width: 74, align: 'center' as const, render: (v: unknown) => Number(v) || 0 })),
-    { title: '操作', key: 'op', render: (_: unknown, r: StoreRanking) => <Button type="link" size="small" data-testid={`store-events-${r.storeName}`} onClick={() => setQueueStore(r.storeName || null)}>查看事件与排队</Button> },
+    { title: '操作', key: 'op', render: (_: unknown, r: StoreRanking) => r.isTotal === 1 ? null : <Button type="link" size="small" data-testid={`store-events-${r.storeName}`} onClick={() => setQueueStore(r.storeName || null)}>查看事件与排队</Button> },
   ];
   const doExport = async () => {
     if (!total) { message.error('当前没有可导出的数据'); return; }
@@ -82,6 +84,36 @@ export function StoreRankingTab({ active }: { active: boolean }) {
     try { const r = await exportStoreRanking(payload()); message.success('已提交导出任务（任务中心）：' + JSON.stringify(r ?? '')); } catch { /* 已提示 */ }
   };
   const search = () => { const p = { ...page, pageNum: 1 }; setPage(p); load(p); };
+  const fetchAll = async () => {
+    const all: StoreRanking[] = [];
+    for (let pn = 1; ; pn++) {
+      const r = await pageStoreRanking(payload({ pageNum: pn, pageSize: 100 }));
+      all.push(...(r.records || []).filter((x) => x.isTotal !== 1));
+      if (pn * 100 >= r.total) break;
+    }
+    return new Map(all.map((r) => [`${r.statDate}|${r.storeId || r.storeName}`, r]));
+  };
+  const compare = async () => {
+    if (!validRange()) return;
+    const key = JSON.stringify(payload({ pageNum: 1, pageSize: 100 }));
+    const current = await fetchAll();
+    if (!baseline.current || baseline.current.key !== key) {
+      baseline.current = { key, rows: current };
+      message.info(`已记录基准 ${current.size} 行；切换 rankingSource 后再点「比对」`);
+      return;
+    }
+    const base = baseline.current.rows;
+    const diffs: string[] = [];
+    new Set([...base.keys(), ...current.keys()]).forEach((k) => {
+      const a = base.get(k), b = current.get(k);
+      if (!a || !b) { diffs.push(`${k}：${a ? '仅基准有' : '仅本次有'}`); return; }
+      COLS.forEach(([label, f]) => { if (Number(a[f] || 0) !== Number(b[f] || 0)) diffs.push(`${k} ${label}：${a[f] ?? 0} → ${b[f] ?? 0}`); });
+    });
+    baseline.current = null;
+    console.table(diffs);
+    Modal.info({ title: `比对 ${base.size} / ${current.size} 行，差异 ${diffs.length} 处`, width: 640,
+      content: diffs.length ? <div style={{ maxHeight: 400, overflow: 'auto' }}>{diffs.slice(0, 200).map((d) => <div key={d}>{d}</div>)}</div> : '完全一致' });
+  };
   return (
     <div>
       <div data-testid="ranking-filter" style={{ background: '#fff', padding: 10, borderRadius: 6, marginBottom: 8 }}>
@@ -89,17 +121,19 @@ export function StoreRankingTab({ active }: { active: boolean }) {
           <L t="管理区域"><AreaCascade value={area} onChange={(a) => setRisk({ area: a })} /></L>
           <L t="门店名称"><Input data-testid="ranking-storeName" allowClear placeholder="请输入门店名称" style={{ width: 150 }} value={storeName} onChange={(e) => setRisk({ storeName: e.target.value })} onPressEnter={search} /></L>
           <L t="事件日期"><DatePicker.RangePicker data-testid="ranking-dateRange" allowClear={false} value={[dates[0] ? dayjs(dates[0]) : null, dates[1] ? dayjs(dates[1]) : null]} onChange={(v) => setRisk({ startDate: v?.[0]?.format('YYYY-MM-DD') ?? null, endDate: v?.[1]?.format('YYYY-MM-DD') ?? null })} /></L>
-          <span style={{ color: '#999' }}>跨度不超过 2 个月</span>
+          <span style={{ color: '#999' }}>跨度不超过 2 个月 · 快照模式数据次日更新</span>
           <Button type="primary" data-testid="ranking-search" onClick={search}>查询</Button>
           <Button data-testid="ranking-reset" onClick={() => { resetRisk(); setTimeout(search, 0); }}>重置</Button>
         </Space>
       </div>
       <SummaryStats s={summary} />
       <Card size="small" title={<span>门店排行 <span style={{ color: '#999', fontWeight: 400 }}>共 {total} 家 · 更新时间 {fmtTime(summary?.dataUpdateTime)}</span></span>}
-        extra={<Space><Button size="small" onClick={doExport}>导出</Button><Button size="small" type="link" onClick={() => load()}>刷新</Button></Space>}>
-        <Table<StoreRanking> data-testid="ranking-table" size="small" rowKey={(r) => `${r.storeId || ''}|${r.storeName || ''}|${r.statDate || ''}`} loading={loading} columns={cols} dataSource={rows} tableLayout="fixed" scroll={{ x: 2100 }}
-          pagination={{ current: page.pageNum, pageSize: page.pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: (t) => `共 ${t} 条`,
-            onChange: (pn, ps) => { const p = { pageNum: ps !== page.pageSize ? 1 : pn, pageSize: ps }; setPage(p); load(p); } }} />
+        extra={<Space><Button size="small" data-testid="ranking-compare" onClick={compare}>比对</Button><Button size="small" onClick={doExport}>导出</Button><Button size="small" type="link" onClick={() => load()}>刷新</Button></Space>}>
+        {/* 每天合计行（isTotal=1）不计分页条数，一页实际行数会超过 pageSize，分页器独立渲染以免 Table 截断 */}
+        <Table<StoreRanking> data-testid="ranking-table" size="small" rowKey={(r) => `${r.isTotal ? 'total' : r.storeId || ''}|${r.storeName || ''}|${r.statDate || ''}`} loading={loading} columns={cols} dataSource={rows} tableLayout="fixed" scroll={{ x: 2100 }}
+          onRow={(r) => (r.isTotal === 1 ? { style: { background: '#f5f5f5', fontWeight: 600 } } : {})} pagination={false} />
+        <Pagination style={{ marginTop: 12, textAlign: 'right' }} current={page.pageNum} pageSize={page.pageSize} total={total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} showTotal={(t) => `共 ${t} 条`}
+          onChange={(pn, ps) => { const p = { pageNum: ps !== page.pageSize ? 1 : pn, pageSize: ps }; setPage(p); load(p); }} />
       </Card>
       <EventQueueModal storeName={queueStore} onClose={() => setQueueStore(null)} />
     </div>

@@ -1,16 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Input, Modal, Radio, Select, Space, message } from 'antd';
+import dayjs from 'dayjs';
 import { getRiskEventDetail, listStoreCraftsmen, submitEventReview } from '../../api/wdz';
 import { APP, PRIMARY_LABELS, SECONDARY_OPTIONS } from '../../constants/marks';
 import { nextReviewType, useDialogs } from '../../store/useDialogs';
 import { useFilters } from '../../store/useFilters';
 import type { CraftsmanOption, EventOrder, PrimaryMarkType, RiskEvent } from '../../types/wdz';
 
+/** 私单默认备注：服务时间=事件时间−服务时长 ~ 事件时间；烫染事件加「（烫染）」。时长未知只写结束时间。 */
+const privateRemarkTemplate = (e?: RiskEvent) => {
+  if (!e?.eventTime) return '';
+  const end = dayjs(e.eventTime);
+  const start = e.serviceDurationSeconds ? end.subtract(e.serviceDurationSeconds, 'second').format('HH:mm') : '?';
+  return `服务时间为${start} ~ ${end.format('HH:mm')}，系统无匹配订单${e.serviceType === '染发' ? '（烫染）' : ''}，需进一步核查`;
+};
+const NON_COMPLIANT_REMARK = '关联订单：';
+
 const SAFE_TYPES = ['NO_RISK', 'INVALID_EVENT', 'DUPLICATE_EVENT', 'STYLIST_MUTUAL_CUT', 'SHORT_TERM_REWORK', 'STYLIST_NON_COMPLIANT'] as const;
 
 /**
  * 标记核实弹窗（对应 v2 openReviewModal/submitReview）。
- * - 私单：二级类型必选 + 归属二选一（关联订单 / 发型师，只发当前模式一侧）+ 备注必填
+ * - 私单：二级类型必选（默认「其他」）+ 归属三选一（关联订单 / 发型师 / 暂不标记，默认暂不标记）+ 备注选填（带默认模板）
  * - 无风险类：六种结论，二级取一级同名文案；均可填备注，只有 NO_RISK 必填
  * - 批量归属只支持同门店同一天；否则两侧不可选、不强校验
  * - 按 nextReviewType 分组提交（初核/复核各一次请求），成功后 bumpRefresh 通知各列表
@@ -24,7 +34,7 @@ export function ReviewModal() {
   const [mode, setMode] = useState<'private' | 'safe' | ''>('');
   const [privateType, setPrivateType] = useState('');
   const [safeType, setSafeType] = useState<string>('');
-  const [target, setTarget] = useState<'order' | 'craftsman'>('order');
+  const [target, setTarget] = useState<'order' | 'craftsman' | 'none'>('none');
   const [orders, setOrders] = useState<{ label: string; options: EventOrder[] }[]>([]);
   const [craftsmen, setCraftsmen] = useState<CraftsmanOption[]>([]);
   const [orderKey, setOrderKey] = useState<string | undefined>();
@@ -47,9 +57,9 @@ export function ReviewModal() {
     // 回填存量标记：一级私单→私单模式；其它一级→无风险模式；归属按存量订单/发型师判定
     const p = first.primaryMarkType;
     setMode(p === 'PRIVATE_ORDER' ? 'private' : p ? 'safe' : '');
-    setPrivateType(p === 'PRIVATE_ORDER' ? first.secondaryMarkType || '' : '');
+    setPrivateType(p === 'PRIVATE_ORDER' ? first.secondaryMarkType || '其他' : '其他');
     setSafeType(p && p !== 'PRIVATE_ORDER' ? p : '');
-    setTarget(first.markedCraftsmanId && !first.markedOrderId && !first.markedOrderNo ? 'craftsman' : 'order');
+    setTarget(first.markedOrderId || first.markedOrderNo ? 'order' : first.markedCraftsmanId ? 'craftsman' : 'none');
     setOrderKey(first.markedOrderId ? `窗口内订单:${first.markedOrderId}` : undefined);
     setCraftsmanId(first.markedCraftsmanId ? String(first.markedCraftsmanId) : undefined);
     setRemark(modify?.remark || '');
@@ -66,10 +76,18 @@ export function ReviewModal() {
       .finally(() => setLoadingOpts(false));
   }, [open, first?.eventId]);
 
+  // 默认备注模板：单个事件、新标记时按所选类型带出；备注已被手改过（不等于任一模板）则不覆盖
+  const templates = useMemo(() => [privateRemarkTemplate(first), NON_COMPLIANT_REMARK].filter(Boolean), [first?.eventId]);
+  useEffect(() => {
+    if (!open || modify || events?.length !== 1) return;
+    const next = mode === 'private' ? privateRemarkTemplate(first) : mode === 'safe' && safeType === 'STYLIST_NON_COMPLIANT' ? NON_COMPLIANT_REMARK : '';
+    setRemark((cur) => (!cur.trim() || templates.includes(cur) ? next : cur));
+  }, [open, mode, safeType, first?.eventId]);
+
   const allOrders = orders.flatMap((g) => g.options);
   const pickedOrder = allOrders.find((o) => String(o.orderId) === (orderKey || '').split(':').pop());
   const pickedCraftsman = craftsmen.find((c) => String(c.craftsmanId) === craftsmanId);
-  const needRemark = mode === 'private' || (mode === 'safe' && safeType === 'NO_RISK');
+  const needRemark = mode === 'safe' && safeType === 'NO_RISK';
   const showRemark = mode === 'private' || (mode === 'safe' && !!safeType);
 
   const submit = async () => {
@@ -79,7 +97,6 @@ export function ReviewModal() {
     if (mode === 'private') {
       primaryMarkType = 'PRIVATE_ORDER'; secondaryMarkType = privateType;
       if (!secondaryMarkType) { message.error('请选择私单类型'); return; }
-      if (!remark.trim()) { message.error('备注信息不能为空'); return; }
       if (scoped) {
         if (target === 'order' && !pickedOrder) { message.error('请选择关联订单'); return; }
         if (target === 'craftsman' && !pickedCraftsman) { message.error('请选择发型师'); return; }
@@ -122,9 +139,9 @@ export function ReviewModal() {
             <>
               <div>私单类型 <span style={{ color: 'red' }}>*</span>　<Select data-testid="review-private-type" style={{ width: 340 }} placeholder="请选择私单类型" value={privateType || undefined} options={SECONDARY_OPTIONS.PRIVATE_ORDER.map((v) => ({ value: v, label: v }))} onChange={setPrivateType} /></div>
               <div>标记归属 <span style={{ color: 'red' }}>*</span>　
-                <Radio.Group value={target} onChange={(e) => { setTarget(e.target.value); setOrderKey(undefined); setCraftsmanId(undefined); }} options={[{ label: '按关联订单', value: 'order' }, { label: '按发型师', value: 'craftsman' }]} />
+                <Radio.Group value={target} onChange={(e) => { setTarget(e.target.value); setOrderKey(undefined); setCraftsmanId(undefined); }} options={[{ label: '按关联订单', value: 'order' }, { label: '按发型师', value: 'craftsman' }, { label: '暂不标记', value: 'none' }]} />
               </div>
-              {!scoped && <Alert type="warning" showIcon message="批量标记归属仅支持同一门店同一天的事件，当前不可选择订单及发型师" />}
+              {!scoped && target !== 'none' && <Alert type="warning" showIcon message="批量标记归属仅支持同一门店同一天的事件，当前不可选择订单及发型师" />}
               {scoped && target === 'order' && (
                 <div>关联订单 <span style={{ color: 'red' }}>*</span>　
                   <Select data-testid="review-order" style={{ width: 440 }} loading={loadingOpts} allowClear placeholder={allOrders.length ? '请选择关联订单' : '暂无可关联订单'} value={orderKey}

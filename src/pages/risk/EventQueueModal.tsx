@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Button, Card, Modal, Space, message } from 'antd';
-import { exportEventQueueEvents, getRiskSummary, pageRiskEventItems } from '../../api/wdz';
+import { exportEventQueueEvents, pageRiskEventItems } from '../../api/wdz';
 import { EventFilterFields, emptyEventFilter, type EventFilter } from '../../components/EventFilterFields';
 import { EventTable } from '../../components/EventTable';
-import { SummaryStats } from '../../components/SummaryStats';
 import { APP, DEFAULT_END_DATE, DEFAULT_START_DATE } from '../../constants/marks';
 import { useDialogs } from '../../store/useDialogs';
 import { useFilters } from '../../store/useFilters';
-import type { PageRiskEventReq, RiskEvent, RiskSummary } from '../../types/wdz';
+import type { PageRiskEventReq, RiskEvent } from '../../types/wdz';
 
 export const eventFilterPayload = (f: EventFilter): Partial<PageRiskEventReq> => ({
   startDate: f.startDate, endDate: f.endDate, eventId: f.eventId.trim().replace(/^#/, '') || null, reviewStatus: f.reviewStatus, riskLevels: f.riskLevels,
@@ -22,7 +21,6 @@ export function EventQueueModal({ storeName, onClose }: { storeName: string | nu
   const [page, setPage] = useState({ pageNum: 1, pageSize: 10 });
   const [rows, setRows] = useState<RiskEvent[]>([]);
   const [total, setTotal] = useState(0);
-  const [summary, setSummary] = useState<RiskSummary | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const set = (p: Partial<EventFilter>) => setF((x) => ({ ...x, ...p }));
@@ -32,9 +30,9 @@ export function EventQueueModal({ storeName, onClose }: { storeName: string | nu
     if (!storeName) return;
     setLoading(true);
     try {
-      const [r, s] = await Promise.all([pageRiskEventItems(payload(p)), getRiskSummary(payload(p))]);
+      const r = await pageRiskEventItems(payload(p));
       const list = r.records || [];
-      setRows(list); setTotal(r.total); setSummary(s);
+      setRows(list); setTotal(r.total);
       const visible = new Set(list.map((e) => String(e.eventId)));
       setSelected((ids) => ids.filter((id) => visible.has(id)));
     } catch { setRows([]); } finally { setLoading(false); }
@@ -55,7 +53,7 @@ export function EventQueueModal({ storeName, onClose }: { storeName: string | nu
   };
   return (
     <Modal title={`查看事件与排队 - ${storeName ?? ''}`} open={!!storeName} onCancel={onClose} footer={null} width="95vw" style={{ top: 16 }} destroyOnHidden data-testid="event-queue-modal">
-      <SummaryStats s={summary} extra={storeInfo} />
+      {storeInfo && <div style={{ marginBottom: 8 }}>{storeInfo}</div>}
       <div style={{ background: '#fafafa', padding: 10, borderRadius: 6, marginBottom: 8 }}>
         <Space size={[8, 8]} wrap>
           <EventFilterFields f={f} set={set} onEnter={search} prefix="eq-" />

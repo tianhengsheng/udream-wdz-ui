@@ -9,7 +9,7 @@ export interface EventFilter {
   primaryMarkType: PrimaryMarkType | ''; secondaryMarkType: string; lastOperatorName: string; lastMarkStartDate: string | null; lastMarkEndDate: string | null;
 }
 export const emptyEventFilter = (startDate: string | null, endDate: string | null): EventFilter => ({
-  startDate, endDate, eventId: '', reviewStatus: '', riskLevels: [], primaryMarkType: '', secondaryMarkType: '', lastOperatorName: '', lastMarkStartDate: null, lastMarkEndDate: null,
+  startDate, endDate, eventId: '', reviewStatus: '', riskLevels: ['HIGH', 'MEDIUM'], primaryMarkType: '', secondaryMarkType: '', lastOperatorName: '', lastMarkStartDate: null, lastMarkEndDate: null,
 });
 export const L = ({ t, children }: { t: string; children: React.ReactNode }) => (
   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ color: '#666', whiteSpace: 'nowrap' }}>{t}</span>{children}</span>

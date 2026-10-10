@@ -13,7 +13,7 @@ export function SummaryStats({ s, extra }: { s?: RiskSummary | null; extra?: Rea
       {extra}
       <Card size="small" title="风险分布" style={{ minWidth: 420 }}>
         <Item label="高风险" value={v.highCount} color="#cf1322" /><Item label="中风险" value={v.mediumCount} color="#d46b08" />
-        <Item label="低风险" value={v.lowCount} color="#389e0d" /><Item label="预警" value={v.warningCount} color="#d4b106" />
+        <Item label="低风险" value={v.lowCount} color="#389e0d" /><Item label="预警" value={v.warningCount} color="#d4b106" /><Item label="无效" value={v.excludedCount} color="#8c8c8c" />
         <Item label="事件总数" value={v.totalCount} />
       </Card>
       <Card size="small" title="检出概况" style={{ minWidth: 520 }} data-testid="detect-summary">

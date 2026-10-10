@@ -14,7 +14,7 @@ export interface AreaOption { id: string; name: string }
 export interface RuleOption { id: string; ruleCode: string; ruleName: string; isDefault: boolean; applicationScope: ApplicationScope }
 
 export interface RiskSummary {
-  totalCount: number; highCount: number; mediumCount: number; lowCount: number; warningCount: number;
+  totalCount: number; highCount: number; mediumCount: number; lowCount: number; warningCount: number; excludedCount: number;
   unverifiedCount: number; privateOrderCount: number; safeCount: number; unmarkedCount: number;
   detectedCount: number; reviewedCount: number; noRiskCount: number; duplicateEventCount: number; invalidEventCount: number; nonCompliantCount: number; mutualCutCount: number; shortTermReworkCount: number;
   dataUpdateTime?: string;
@@ -58,7 +58,7 @@ export interface RiskWindow {
 }
 
 export interface StoreRanking {
-  cityName?: string; cityManagerName?: string; regionManagerName?: string; storeId?: string; storeName?: string; statDate?: string;
+  isTotal?: number; cityName?: string; cityManagerName?: string; regionManagerName?: string; storeId?: string; storeName?: string; statDate?: string;
   detectedCount?: number; reviewedCount?: number; noRiskCount?: number; duplicateEventCount?: number; invalidEventCount?: number;
   nonCompliantCount?: number; mutualCutCount?: number; shortTermReworkCount?: number;
   totalCount: number; highCount: number; mediumCount: number; lowCount: number; warningCount: number;
