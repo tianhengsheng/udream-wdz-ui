@@ -1,10 +1,12 @@
+import dayjs from 'dayjs';
 /**
  * 值域与 v2.js labels/secondaryOptions 同源；一级标记 7 个须与后端 WdzAiV2Request @Pattern 同步。
  * 剔分口径在后端（只有无效/重复剔分），前端只做展示。
  */
 export const APP = 'UDREAM';
-export const DEFAULT_START_DATE = '2026-08-22';
-export const DEFAULT_END_DATE = '2026-08-22';
+/** 事件日期默认昨天（快照只到昨天） */
+export const DEFAULT_START_DATE = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+export const DEFAULT_END_DATE = DEFAULT_START_DATE;
 
 export const RISK_LABELS: Record<string, string> = { HIGH: '高风险', MEDIUM: '中风险', LOW: '低风险', WARNING: '预警', EXCLUDED: '无效' };
 export const RISK_COLORS: Record<string, string> = { HIGH: 'red', MEDIUM: 'orange', LOW: 'green', WARNING: 'gold' };

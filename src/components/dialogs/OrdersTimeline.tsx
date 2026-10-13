@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Segmented, Space, Spin, Tooltip } from 'antd';
+import { Button, Image, Segmented, Space, Spin, Tooltip } from 'antd';
 import dayjs from 'dayjs';
 import { pageBehaviorRules, pageReviewRecords, pageRiskEventItems } from '../../api/wdz';
 import { APP, PRIMARY_LABELS, RISK_LABELS } from '../../constants/marks';
@@ -21,7 +21,7 @@ const RISK_COLORS: Record<string, string> = { HIGH: RED, MEDIUM: ORANGE, WARNING
 /** 标记写在色块下方小字：私单=红，不剔除=绿，重算剔除=灰 */
 const MARK_FG = { private: '#cf1322', kept: '#389e0d', dropped: '#8c8c8c' };
 const MARK_STYLES: Record<string, { text: string; fg: string }> = {
-  PRIVATE_ORDER: { text: '私单', fg: MARK_FG.private },
+  PRIVATE_ORDER: { text: '疑似私单', fg: MARK_FG.private },
   NO_RISK: { text: '无风险', fg: MARK_FG.kept }, STYLIST_NON_COMPLIANT: { text: '不合规', fg: MARK_FG.kept },
   STYLIST_MUTUAL_CUT: { text: '互剪', fg: MARK_FG.dropped }, SHORT_TERM_REWORK: { text: '重修', fg: MARK_FG.dropped },
   INVALID_EVENT: { text: '无效', fg: MARK_FG.dropped }, DUPLICATE_EVENT: { text: '重复', fg: MARK_FG.dropped },
@@ -77,11 +77,16 @@ function pack<T extends { from: number; to: number }>(items: T[]): T[][] {
 
 export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: { orders: EventOrder[]; ordersLoading: boolean; event: RiskEvent | null; onOrderClick: (o: EventOrder) => void }) {
   const openDetail = useDialogs((s) => s.openDetail);
+  const openReview = useDialogs((s) => s.openReview);
+  const refreshTick = useDialogs((s) => s.refreshTick);
+  const reviewing = useDialogs((s) => !!s.reviewEvents);
   const [dayEvents, setDayEvents] = useState<RiskEvent[]>([]);
   const [params, setParams] = useState<{ window: number; nearby: number }>({ window: 10, nearby: 60 });
   /** 同店当天事件+规则参数已就绪的事件 ID；与订单、当前事件全部到齐后才渲染，只渲染一次 */
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [scale, setScale] = useState(2);
+  /** 悬停提示内图片点击看大图（预览挂在组件根，提示关闭不影响） */
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   /** 事件 ID → 最新一条初核/复核记录的备注 */
   const [remarks, setRemarks] = useState<Map<string, { first?: string; second?: string }>>(new Map());
   const [hover, setHover] = useState<{ kind: 'e' | 'o'; key: string } | null>(null);
@@ -144,7 +149,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
       setParams({ window: p.timeWindowMinutes || 10, nearby: p.nearbyMinutes || 60 });
       setLoadedFor(String(event.eventId));
     });
-  }, [event?.eventId]);
+  }, [event?.eventId, refreshTick]); // 标记提交后 bumpRefresh 重新拉取，色块/备注即时更新
 
   const orderBars: OrderBar[] = useMemo(() => orders.map((o) => {
     const create = m(o.orderCreateTime), start = m(o.serviceStartTime), end = m(o.serviceEndTime);
@@ -248,12 +253,19 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
     const risk = RISK_LABELS[b.e.riskLevel || ''] || b.e.riskLevel || '-';
     return (
       <div style={line}>
-        <div><b>#{b.e.eventId}</b> · {b.e.workName || '-'} · {isDyeEvent(b.e) ? <DyeText /> : (b.e.serviceType || b.e.checkType || '-')}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ flex: 1 }}><b>#{b.e.eventId}</b> · {b.e.workName || '-'} · {isDyeEvent(b.e) ? <DyeText /> : (b.e.serviceType || b.e.checkType || '-')}</span>
+          {/* 快速标记：打开全局标记弹窗 */}
+          <Button size="small" type="primary" data-testid={`tl-review-${b.e.eventId}`} onClick={(ev) => { ev.stopPropagation(); openReview([b.e]); }}>标记</Button>
+        </div>
         <div>{risk}{b.e.riskScore != null ? ` ${b.e.riskScore} 分` : ''} · 时长 {b.hasDuration ? `${Math.round((b.e.serviceDurationSeconds || 0) / 60)} 分钟` : '未知'}</div>
         <div>{b.hasDuration ? `${hm(dayjs(b.e.eventTime).subtract(b.e.serviceDurationSeconds || 0, 'second').format('YYYY-MM-DD HH:mm:ss'))} ~ ` : ''}{hm(b.e.eventTime)}</div>
         {b.e.primaryMarkType && <div>已标记：{PRIMARY_LABELS[b.e.primaryMarkType] || b.e.primaryMarkType}</div>}
         {remarks.get(String(b.e.eventId))?.first && <div style={{ color: '#ffd666', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>初核：{remarks.get(String(b.e.eventId))?.first}</div>}
         {remarks.get(String(b.e.eventId))?.second && <div style={{ color: '#ff7875', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>复核：{remarks.get(String(b.e.eventId))?.second}</div>}
+        {/* 事件图片：比对附近事件是否同一人 */}
+        {b.e.imageUrl && <img src={b.e.imageUrl} alt="" title="点击看大图" onClick={(ev) => { ev.stopPropagation(); setPreviewUrl(b.e.imageUrl!); }}
+          style={{ display: 'block', width: 280, maxHeight: 210, objectFit: 'contain', marginTop: 4, borderRadius: 2, background: '#000', cursor: 'zoom-in' }} />}
       </div>
     );
   };
@@ -353,7 +365,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
             const mark = b.e.primaryMarkType ? MARK_STYLES[b.e.primaryMarkType] : undefined;
             const left = x(b.from), w = Math.max(3, x(b.to) - x(b.from)), top = ri * EV_ROW_H + 4;
             return [
-              <Tooltip key={b.e.eventId} title={eventTip(b)}>
+              <Tooltip key={b.e.eventId} title={eventTip(b)} overlayStyle={{ maxWidth: 320 }} open={previewUrl || reviewing ? false : undefined}>
                 <div onClick={() => openDetail(String(b.e.eventId))} onMouseEnter={() => setHover({ kind: 'e', key: String(b.e.eventId) })} onMouseLeave={() => setHover(null)}
                   style={{ position: 'absolute', left, width: w, top, height: EV_BAR_H, cursor: 'pointer', zIndex: isCur ? 2 : 1,
                   // 当前事件不改色（与图例一致），只加细边框
@@ -404,6 +416,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
       <div style={{ color: '#999', fontSize: 12, marginTop: 6 }}>
         AI 事件条长 = 事件时长（去重丢弃的事件不在检测结果中，不显示）；订单受上方状态/订单号筛选影响；点事件看详情，点订单看订单详情。仅供人工初筛，不参与计算。
       </div>
+      {previewUrl && <Image src={previewUrl} style={{ display: 'none' }} preview={{ visible: true, src: previewUrl, onVisibleChange: (v) => { if (!v) setPreviewUrl(null); } }} />}
     </div>
   );
 }

@@ -255,18 +255,12 @@ const __t = {
     return { total: stores.length, ms: Math.round(performance.now() - t0), keys: stores.map(key),
       rows: Object.fromEntries(stores.map((x) => [key(x), x])), totals: Object.fromEntries(all.filter((x) => x.isTotal === 1).map((x) => [x.statDate, x])) };
   },
-  /** 汇总卡（三个页签共用 getRiskSummary）取数，extra 覆盖默认参数（默认 08-22、全部范围）；返回 {ms, s} */
+  /** 汇总卡（三个页签共用 getRiskSummary，随 rankingSource 开关）取数，extra 覆盖默认参数（默认 08-22、全部范围）；返回 {ms, s} */
   async summary(extra: Record<string, unknown> = {}) {
     const { getRiskSummary } = await import('../api/wdz');
     const t0 = performance.now();
     const s = await getRiskSummary({ app: 'UDREAM', pageNum: 1, pageSize: 20, applicationScope: 'ALL', startDate: '2026-08-22', endDate: '2026-08-22', ...extra } as any);
     return { ms: Math.round(performance.now() - t0), s };
-  },
-  /** 比对两次 summary 的全部数值字段（更新时间除外）。 */
-  summaryDiff(a: any, b: any) {
-    const keys = Object.keys({ ...a.s, ...b.s }).filter((k) => k !== 'dataUpdateTime');
-    const diffs = keys.filter((k) => Number(a.s[k] || 0) !== Number(b.s[k] || 0)).map((k) => `${k}: ${a.s[k]}≠${b.s[k]}`);
-    return { ms: [a.ms, b.ms], fields: keys.length, diffs: diffs.length, sample: diffs, updateTime: [a.s.dataUpdateTime, b.s.dataUpdateTime] };
   },
   /** 比对两次 rankAll：行集合、19 个数值列、排序顺序、每日合计。 */
   rankDiff(a: any, b: any) {
