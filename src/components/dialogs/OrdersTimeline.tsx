@@ -5,6 +5,7 @@ import { pageBehaviorRules, pageReviewRecords, pageRiskEventItems } from '../../
 import { APP, PRIMARY_LABELS, RISK_LABELS } from '../../constants/marks';
 import { useDialogs } from '../../store/useDialogs';
 import { useFilters } from '../../store/useFilters';
+import { openMonitor } from '../../utils/monitor';
 import type { EventOrder, ReviewRecord, RiskEvent } from '../../types/wdz';
 import { money } from '../../utils/format';
 
@@ -255,7 +256,8 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
       <div style={line}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ flex: 1 }}><b>#{b.e.eventId}</b> · {b.e.workName || '-'} · {isDyeEvent(b.e) ? <DyeText /> : (b.e.serviceType || b.e.checkType || '-')}</span>
-          {/* 快速标记：打开全局标记弹窗 */}
+          {/* 快速跳监控 / 快速标记 */}
+          <Button size="small" data-testid={`tl-monitor-${b.e.eventId}`} onClick={(ev) => { ev.stopPropagation(); openMonitor(b.e); }}>查看监控</Button>
           <Button size="small" type="primary" data-testid={`tl-review-${b.e.eventId}`} onClick={(ev) => { ev.stopPropagation(); openReview([b.e]); }}>标记</Button>
         </div>
         <div>{risk}{b.e.riskScore != null ? ` ${b.e.riskScore} 分` : ''} · 时长 {b.hasDuration ? `${Math.round((b.e.serviceDurationSeconds || 0) / 60)} 分钟` : '未知'}</div>
