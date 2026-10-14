@@ -97,7 +97,6 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
   const openDetail = useDialogs((s) => s.openDetail);
   const openReview = useDialogs((s) => s.openReview);
   const refreshTick = useDialogs((s) => s.refreshTick);
-  const reviewing = useDialogs((s) => !!s.reviewEvents);
   const [dayEvents, setDayEvents] = useState<RiskEvent[]>([]);
   const [params, setParams] = useState<{ window: number; nearby: number }>({ window: 10, nearby: 60 });
   /** 同店当天事件+规则参数已就绪的事件 ID；与订单、当前事件全部到齐后才渲染，只渲染一次 */
@@ -283,8 +282,8 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
   };
   const durText = (b: EventBar) => (b.hasDuration ? `${Math.round((b.e.serviceDurationSeconds || 0) / 60)} 分钟` : '未知');
   const rangeText = (b: EventBar) => `${b.hasDuration ? `${hm(dayjs(b.e.eventTime).subtract(b.e.serviceDurationSeconds || 0, 'second').format('YYYY-MM-DD HH:mm:ss'))} ~ ` : ''}${hm(b.e.eventTime)}`;
-  /** 事件文字摘要：悬停提示与点击浮层共用 */
-  const eventInfo = (b: EventBar, dark: boolean) => {
+  /** 事件文字摘要（点击浮层） */
+  const eventInfo = (b: EventBar) => {
     const risk = RISK_LABELS[b.e.riskLevel || ''] || b.e.riskLevel || '-';
     const rm = remarks.get(String(b.e.eventId));
     return (
@@ -293,13 +292,11 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
         <div>{risk}{b.e.riskScore != null ? ` ${b.e.riskScore} 分` : ''} · 时长 {durText(b)}</div>
         <div>{rangeText(b)}</div>
         {b.e.primaryMarkType && <div>已标记：{PRIMARY_LABELS[b.e.primaryMarkType] || b.e.primaryMarkType}</div>}
-        {rm?.first && <div style={{ color: dark ? '#ffd666' : '#d48806', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>初核：{rm.first}</div>}
-        {rm?.second && <div style={{ color: dark ? '#ff7875' : '#cf1322', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>复核：{rm.second}</div>}
+        {rm?.first && <div style={{ color: '#d48806', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>初核：{rm.first}</div>}
+        {rm?.second && <div style={{ color: '#cf1322', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>复核：{rm.second}</div>}
       </>
     );
   };
-  /** 悬停：只看文字 */
-  const eventTip = (b: EventBar) => <div style={line}>{eventInfo(b, true)}</div>;
   const togglePin = (id: string) => setPinIds((ids) => {
     if (ids.includes(id)) return ids.filter((x) => x !== id);
     if (ids.length >= PIN_MAX) message.info(`对比栏最多 ${PIN_MAX} 张，已移出最早固定的一张`);
@@ -311,7 +308,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
     const pinned = pinIds.includes(id);
     return (
       <div style={{ ...line, width: 300 }} data-testid={`tl-popover-${id}`}>
-        {eventInfo(b, false)}
+        {eventInfo(b)}
         <div style={{ marginTop: 6 }}><EventImage url={b.e.imageUrl} width={300} height={169} onOpen={setPreviewUrl} /></div>
         <Space size={6} style={{ marginTop: 8 }} wrap>
           <Button size="small" data-testid={`tl-detail-${id}`} onClick={() => { setSelectedId(null); openDetail(id); }}>详情</Button>
@@ -475,13 +472,11 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
             return [
               <Popover key={b.e.eventId} trigger="click" placement="bottom" content={eventPopover(b)}
                 open={selected && !previewUrl} onOpenChange={(v) => setSelectedId((sid) => (v ? id : sid === id ? null : sid))}>
-                <Tooltip title={eventTip(b)} overlayStyle={{ maxWidth: 320 }} open={selected || previewUrl || reviewing ? false : undefined}>
-                  <div data-testid={`tl-event-${id}`} onMouseEnter={() => setHover({ kind: 'e', key: id })} onMouseLeave={() => setHover(null)}
+                <div data-testid={`tl-event-${id}`} onMouseEnter={() => setHover({ kind: 'e', key: id })} onMouseLeave={() => setHover(null)}
                     style={{ position: 'absolute', left, width: w, top, height: EV_BAR_H, cursor: 'pointer', zIndex: selected ? 3 : isCur ? 2 : 1,
                     background: barColor(b.e), borderRadius: 2, boxShadow: ring || undefined,
                     opacity: b.hasDuration ? 1 : 0.6, overflow: 'hidden', whiteSpace: 'nowrap', lineHeight: `${EV_BAR_H}px` }}>
                   </div>
-                </Tooltip>
               </Popover>,
               // 固定编号：色块左上角，与对比栏卡片编号一致
               no && (
@@ -528,7 +523,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
         {legendRows.map(([k, v]) => [<span key={`${k}-k`} style={{ color: '#999' }}>{k}</span>, <Space key={`${k}-v`} size={16} wrap>{v}</Space>])}
       </div>
       <div style={{ color: '#999', fontSize: 12, marginTop: 6 }}>
-        AI 事件条长 = 事件时长（去重丢弃的事件不在检测结果中，不显示）；订单受上方状态/订单号筛选影响；悬停事件看摘要，点事件弹出图片与操作（详情/监控/固定对比/标记，Esc 关闭），点订单看订单详情。仅供人工初筛，不参与计算。
+        AI 事件条长 = 事件时长（去重丢弃的事件不在检测结果中，不显示）；订单受上方状态/订单号筛选影响；点事件弹出摘要、图片与操作（详情/监控/固定对比/标记，Esc 关闭），点订单看订单详情。仅供人工初筛，不参与计算。
       </div>
       {previewUrl && <Image src={previewUrl} style={{ display: 'none' }} preview={{ visible: true, src: previewUrl, onVisibleChange: (v) => { if (!v) setPreviewUrl(null); } }} />}
     </div>
