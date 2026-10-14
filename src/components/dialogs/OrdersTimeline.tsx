@@ -316,7 +316,8 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
   const pinNo = new Map(pinnedBars.map((b, i) => [String(b.e.eventId), i + 1]));
   const PIN_COLOR = '#722ed1';
   const pinBadge = (n: number) => (
-    <span style={{ display: 'inline-block', minWidth: 16, height: 16, lineHeight: '16px', borderRadius: 8, background: PIN_COLOR, color: '#fff', fontSize: 11, fontWeight: 600, textAlign: 'center' }}>{n}</span>
+    // 小号描边样式，避免抢眼
+    <span style={{ display: 'inline-block', boxSizing: 'border-box', minWidth: 12, height: 12, lineHeight: '10px', borderRadius: 6, border: `1px solid ${PIN_COLOR}`, background: '#fff', color: PIN_COLOR, fontSize: 9, textAlign: 'center', verticalAlign: 'middle' }}>{n}</span>
   );
   /** 卡片点文字：选中并把色块滚到视口中间 */
   const locate = (b: EventBar) => {
@@ -474,7 +475,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
               </Popover>,
               // 固定编号：色块左上角，与对比栏卡片编号一致
               no && (
-                <div key={`${b.e.eventId}-pin`} style={{ position: 'absolute', left: left - 8, top: top - 7, zIndex: 4, pointerEvents: 'none' }}>{pinBadge(no)}</div>
+                <div key={`${b.e.eventId}-pin`} style={{ position: 'absolute', left: left - 5, top: top - 5, zIndex: 4, pointerEvents: 'none', lineHeight: 0 }}>{pinBadge(no)}</div>
               ),
               (mark || isDyeEvent(b.e)) && (
                 <div key={`${b.e.eventId}-mark`} style={{ position: 'absolute', left: left + w / 2, top: top + EV_BAR_H + 2, transform: 'translateX(-50%)', fontSize: MARK_FONT, lineHeight: '12px',
