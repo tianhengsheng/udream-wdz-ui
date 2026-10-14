@@ -78,6 +78,21 @@ function pack<T extends { from: number; to: number }>(items: T[]): T[][] {
   return rows;
 }
 
+/** 事件图片：固定宽高防加载跳动，未加载完浅灰占位，失败给提示 */
+function EventImage({ url, width, height, onOpen }: { url?: string; width: number | string; height: number; onOpen: (u: string) => void }) {
+  const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading');
+  useEffect(() => setState('loading'), [url]);
+  const box = { width, height, borderRadius: 2, overflow: 'hidden', position: 'relative' as const, background: state === 'ok' ? '#000' : '#f0f0f0' };
+  if (!url) return <div style={{ ...box, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: 12 }}>无图片</div>;
+  return (
+    <div style={box}>
+      {state === 'error' && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: 12 }}>图片加载失败</div>}
+      <img src={url} alt="" title="点击看大图" onLoad={() => setState('ok')} onError={() => setState('error')} onClick={() => onOpen(url)}
+        style={{ display: 'block', width: '100%', height: '100%', objectFit: 'contain', cursor: 'zoom-in', opacity: state === 'ok' ? 1 : 0, transition: 'opacity .15s' }} />
+    </div>
+  );
+}
+
 export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: { orders: EventOrder[]; ordersLoading: boolean; event: RiskEvent | null; onOrderClick: (o: EventOrder) => void }) {
   const openDetail = useDialogs((s) => s.openDetail);
   const openReview = useDialogs((s) => s.openReview);
@@ -297,10 +312,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
     return (
       <div style={{ ...line, width: 300 }} data-testid={`tl-popover-${id}`}>
         {eventInfo(b, false)}
-        {b.e.imageUrl
-          ? <img src={b.e.imageUrl} alt="" title="点击看大图" onClick={() => setPreviewUrl(b.e.imageUrl!)}
-              style={{ display: 'block', width: '100%', maxHeight: 225, objectFit: 'contain', marginTop: 6, borderRadius: 2, background: '#000', cursor: 'zoom-in' }} />
-          : <div style={{ color: '#999', marginTop: 6 }}>无图片</div>}
+        <div style={{ marginTop: 6 }}><EventImage url={b.e.imageUrl} width={300} height={169} onOpen={setPreviewUrl} /></div>
         <Space size={6} style={{ marginTop: 8 }} wrap>
           <Button size="small" data-testid={`tl-detail-${id}`} onClick={() => { setSelectedId(null); openDetail(id); }}>详情</Button>
           <Button size="small" data-testid={`tl-monitor-${id}`} onClick={() => { setSelectedId(null); openMonitor(b.e); }}>查看监控</Button>
@@ -337,9 +349,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
             // 悬停卡片 ⇄ 高亮对应色块（共用 hover 状态）
             <div key={id} data-testid={`tl-pin-card-${id}`} onMouseEnter={() => setHover({ kind: 'e', key: id })} onMouseLeave={() => setHover(null)}
               style={{ width: 240, fontSize: 12, lineHeight: '18px', border: `${lit ? 2 : 1}px solid ${lit ? PIN_COLOR : id === String(event?.eventId) ? '#f5222d' : '#e8e8e8'}`, borderRadius: 4, background: '#fff', padding: lit ? 3 : 4 }}>
-              {b.e.imageUrl
-                ? <img src={b.e.imageUrl} alt="" title="点击看大图" onClick={() => setPreviewUrl(b.e.imageUrl!)} style={{ display: 'block', width: '100%', height: 150, objectFit: 'contain', background: '#000', borderRadius: 2, cursor: 'zoom-in' }} />
-                : <div style={{ height: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', background: '#f5f5f5' }}>无图片</div>}
+              <EventImage url={b.e.imageUrl} width="100%" height={130} onOpen={setPreviewUrl} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
                 {pinBadge(pinNo.get(id) || 0)}
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }} title="定位到该事件" onClick={() => locate(b)}>
