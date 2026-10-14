@@ -6,7 +6,7 @@ import { BatchReviewTab } from './BatchReviewTab';
 
 /** 私单AI行为检测：三个页签共享应用范围/默认规则（useFilters） */
 export function RiskPage() {
-  const [tab, setTab] = useState('events');
+  const [tab, setTab] = useState('batch'); // 默认第一个页签：批量核查
   return (
     <div style={{ padding: 12 }}>
       <h2 style={{ margin: '0 0 8px' }}>私单AI行为检测 <span style={{ color: '#999', fontSize: 12, fontWeight: 400 }}>按门店和时间窗口汇总 AI 事件，展开后进行核查与标记</span></h2>
