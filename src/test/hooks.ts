@@ -2,6 +2,7 @@
  * 测试钩子 window.__t：与 docs/wdz-ai/test-hooks.js 同名同语义，组件内真实实现（dev-only）。
  * 所有方法返回可 JSON 序列化的紧凑结果，供 javascript_tool 文本断言。
  */
+import dayjs from 'dayjs';
 import { useSession } from '../store/useSession';
 import { useFilters } from '../store/useFilters';
 import { useDialogs } from '../store/useDialogs';
@@ -68,6 +69,23 @@ const topLayer = () => {
   return { modal: modals[modals.length - 1] || null, drawer: drawers[drawers.length - 1] || null };
 };
 /** antd RangePicker 赋值：逐个输入框 输入→Enter 提交 */
+/**
+ * 直接调用 RangePicker 业务层 onChange（沿 React fiber 向上找带 onChange 且 value 为数组的最外层 props）。
+ * 键盘模拟输入在部分页面（如核查日志）不会提交，只改了显示文字，故优先走此路径。
+ */
+function callRangeOnChange(picker: HTMLElement, start: string, end: string) {
+  const key = Object.keys(picker).find((k) => k.startsWith('__reactFiber$'));
+  let fiber = key ? (picker as any)[key] : null;
+  let target: ((v: unknown, s: string[]) => void) | null = null;
+  for (let i = 0; fiber && i < 40; i++, fiber = fiber.return) {
+    const props = fiber.memoizedProps;
+    if (props && typeof props.onChange === 'function' && Array.isArray(props.value)) target = props.onChange;
+  }
+  if (!target) return false;
+  target([dayjs(start), dayjs(end)], [start, end]);
+  return true;
+}
+
 async function setPickerInput(input: HTMLInputElement, value: string) {
   input.focus();
   input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
@@ -135,10 +153,13 @@ const __t = {
     if (!picker) return { ok: false, error: `range picker not found: ${sel}`, pickers: pickers.map((p) => p.querySelector('input')?.getAttribute('data-testid') || '') };
     const inputs = $$<HTMLInputElement>('input', picker);
     if (inputs.length < 2) return { ok: false, error: 'range inputs < 2' };
-    await setPickerInput(inputs[0], start);
-    await setPickerInput(inputs[1], end);
-    inputs[1].blur();
-    document.body.click();
+    if (!callRangeOnChange(picker, start, end)) {
+      // 兜底：键盘模拟输入
+      await setPickerInput(inputs[0], start);
+      await setPickerInput(inputs[1], end);
+      inputs[1].blur();
+      document.body.click();
+    }
     await sleep(150);
     return { ok: inputs[0].value === start && inputs[1].value === end, values: [inputs[0].value, inputs[1].value] };
   },

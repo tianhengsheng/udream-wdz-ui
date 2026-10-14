@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Image, Segmented, Space, Spin, Tooltip } from 'antd';
+import { Button, Image, Popover, Segmented, Space, Spin, Tooltip, message } from 'antd';
 import dayjs from 'dayjs';
 import { pageBehaviorRules, pageReviewRecords, pageRiskEventItems } from '../../api/wdz';
 import { APP, PRIMARY_LABELS, RISK_LABELS } from '../../constants/marks';
@@ -35,6 +35,8 @@ const barColor = (e: RiskEvent) => {
   return RISK_COLORS[e.riskLevel || ''] || '#d9d9d9';
 };
 const MARK_FONT = 10, EV_ROW_H = 34, EV_BAR_H = 14;
+/** 对比栏最多固定张数，超出挤掉最早的 */
+const PIN_MAX = 3;
 const PRIVATE_COLOR = '#a8071a', ORDER_WINDOW = '#08979c', ORDER_NEAR = '#4a6285', ORDER_OTHER = '#9fb4cc', ORDER_OFF = '#d9d9d9';
 const SCALES = [{ label: '全天', value: 0.8 }, { label: '标准', value: 2 }, { label: '放大', value: 5 }];
 const LABEL_W = 120, ROW_H = 24, DAY_END = 27 * 60; // 次日 03:00
@@ -86,8 +88,12 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
   /** 同店当天事件+规则参数已就绪的事件 ID；与订单、当前事件全部到齐后才渲染，只渲染一次 */
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const [scale, setScale] = useState(2);
-  /** 悬停提示内图片点击看大图（预览挂在组件根，提示关闭不影响） */
+  /** 浮层/对比栏图片点击看大图（预览挂在组件根，浮层关闭不影响） */
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  /** 点击选中的事件（弹浮层：图片 + 操作） */
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** 对比栏固定的事件 ID（按固定先后） */
+  const [pinIds, setPinIds] = useState<string[]>([]);
   /** 事件 ID → 最新一条初核/复核记录的备注 */
   const [remarks, setRemarks] = useState<Map<string, { first?: string; second?: string }>>(new Map());
   const [hover, setHover] = useState<{ kind: 'e' | 'o'; key: string } | null>(null);
@@ -151,6 +157,16 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
       setLoadedFor(String(event.eventId));
     });
   }, [event?.eventId, refreshTick]); // 标记提交后 bumpRefresh 重新拉取，色块/备注即时更新
+
+  // 换事件清空选中与对比栏
+  useEffect(() => { setSelectedId(null); setPinIds([]); }, [event?.eventId]);
+  // Esc 只关浮层：捕获阶段拦截，不让外层抽屉也跟着关闭
+  useEffect(() => {
+    if (!selectedId) return;
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape' && !previewUrl) { ev.stopPropagation(); setSelectedId(null); } };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [selectedId, previewUrl]);
 
   const orderBars: OrderBar[] = useMemo(() => orders.map((o) => {
     const create = m(o.orderCreateTime), start = m(o.serviceStartTime), end = m(o.serviceEndTime);
@@ -250,24 +266,97 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
       </div>
     );
   };
-  const eventTip = (b: EventBar) => {
+  const durText = (b: EventBar) => (b.hasDuration ? `${Math.round((b.e.serviceDurationSeconds || 0) / 60)} 分钟` : '未知');
+  const rangeText = (b: EventBar) => `${b.hasDuration ? `${hm(dayjs(b.e.eventTime).subtract(b.e.serviceDurationSeconds || 0, 'second').format('YYYY-MM-DD HH:mm:ss'))} ~ ` : ''}${hm(b.e.eventTime)}`;
+  /** 事件文字摘要：悬停提示与点击浮层共用 */
+  const eventInfo = (b: EventBar, dark: boolean) => {
     const risk = RISK_LABELS[b.e.riskLevel || ''] || b.e.riskLevel || '-';
+    const rm = remarks.get(String(b.e.eventId));
     return (
-      <div style={line}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ flex: 1 }}><b>#{b.e.eventId}</b> · {b.e.workName || '-'} · {isDyeEvent(b.e) ? <DyeText /> : (b.e.serviceType || b.e.checkType || '-')}</span>
-          {/* 快速跳监控 / 快速标记 */}
-          <Button size="small" data-testid={`tl-monitor-${b.e.eventId}`} onClick={(ev) => { ev.stopPropagation(); openMonitor(b.e); }}>查看监控</Button>
-          <Button size="small" type="primary" data-testid={`tl-review-${b.e.eventId}`} onClick={(ev) => { ev.stopPropagation(); openReview([b.e]); }}>标记</Button>
-        </div>
-        <div>{risk}{b.e.riskScore != null ? ` ${b.e.riskScore} 分` : ''} · 时长 {b.hasDuration ? `${Math.round((b.e.serviceDurationSeconds || 0) / 60)} 分钟` : '未知'}</div>
-        <div>{b.hasDuration ? `${hm(dayjs(b.e.eventTime).subtract(b.e.serviceDurationSeconds || 0, 'second').format('YYYY-MM-DD HH:mm:ss'))} ~ ` : ''}{hm(b.e.eventTime)}</div>
+      <>
+        <div><b>#{b.e.eventId}</b> · {b.e.workName || '-'} · {isDyeEvent(b.e) ? <DyeText /> : (b.e.serviceType || b.e.checkType || '-')}</div>
+        <div>{risk}{b.e.riskScore != null ? ` ${b.e.riskScore} 分` : ''} · 时长 {durText(b)}</div>
+        <div>{rangeText(b)}</div>
         {b.e.primaryMarkType && <div>已标记：{PRIMARY_LABELS[b.e.primaryMarkType] || b.e.primaryMarkType}</div>}
-        {remarks.get(String(b.e.eventId))?.first && <div style={{ color: '#ffd666', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>初核：{remarks.get(String(b.e.eventId))?.first}</div>}
-        {remarks.get(String(b.e.eventId))?.second && <div style={{ color: '#ff7875', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>复核：{remarks.get(String(b.e.eventId))?.second}</div>}
-        {/* 事件图片：比对附近事件是否同一人 */}
-        {b.e.imageUrl && <img src={b.e.imageUrl} alt="" title="点击看大图" onClick={(ev) => { ev.stopPropagation(); setPreviewUrl(b.e.imageUrl!); }}
-          style={{ display: 'block', width: 280, maxHeight: 210, objectFit: 'contain', marginTop: 4, borderRadius: 2, background: '#000', cursor: 'zoom-in' }} />}
+        {rm?.first && <div style={{ color: dark ? '#ffd666' : '#d48806', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>初核：{rm.first}</div>}
+        {rm?.second && <div style={{ color: dark ? '#ff7875' : '#cf1322', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>复核：{rm.second}</div>}
+      </>
+    );
+  };
+  /** 悬停：只看文字 */
+  const eventTip = (b: EventBar) => <div style={line}>{eventInfo(b, true)}</div>;
+  const togglePin = (id: string) => setPinIds((ids) => {
+    if (ids.includes(id)) return ids.filter((x) => x !== id);
+    if (ids.length >= PIN_MAX) message.info(`对比栏最多 ${PIN_MAX} 张，已移出最早固定的一张`);
+    return [...ids, id].slice(-PIN_MAX);
+  });
+  /** 点击浮层：文字 + 图片（点开大图）+ 操作按钮；点任一按钮后收起浮层 */
+  const eventPopover = (b: EventBar) => {
+    const id = String(b.e.eventId);
+    const pinned = pinIds.includes(id);
+    return (
+      <div style={{ ...line, width: 300 }} data-testid={`tl-popover-${id}`}>
+        {eventInfo(b, false)}
+        {b.e.imageUrl
+          ? <img src={b.e.imageUrl} alt="" title="点击看大图" onClick={() => setPreviewUrl(b.e.imageUrl!)}
+              style={{ display: 'block', width: '100%', maxHeight: 225, objectFit: 'contain', marginTop: 6, borderRadius: 2, background: '#000', cursor: 'zoom-in' }} />
+          : <div style={{ color: '#999', marginTop: 6 }}>无图片</div>}
+        <Space size={6} style={{ marginTop: 8 }} wrap>
+          <Button size="small" data-testid={`tl-detail-${id}`} onClick={() => { setSelectedId(null); openDetail(id); }}>详情</Button>
+          <Button size="small" data-testid={`tl-monitor-${id}`} onClick={() => { setSelectedId(null); openMonitor(b.e); }}>查看监控</Button>
+          <Button size="small" data-testid={`tl-pin-${id}`} onClick={() => { setSelectedId(null); togglePin(id); }}>{pinned ? '取消固定' : '📌 固定对比'}</Button>
+          <Button size="small" type="primary" data-testid={`tl-review-${id}`} onClick={() => { setSelectedId(null); openReview([b.e]); }}>标记</Button>
+        </Space>
+      </div>
+    );
+  };
+  /** 已固定事件按时间先后编号 ①②③：对比栏卡片与时间轴色块用同一编号对应 */
+  const pinnedBars = pinIds.map((id) => eventBars.find((b) => String(b.e.eventId) === id)).filter((b): b is EventBar => !!b)
+    .sort((a, b) => a.from - b.from);
+  const pinNo = new Map(pinnedBars.map((b, i) => [String(b.e.eventId), i + 1]));
+  const PIN_COLOR = '#722ed1';
+  const pinBadge = (n: number) => (
+    <span style={{ display: 'inline-block', minWidth: 16, height: 16, lineHeight: '16px', borderRadius: 8, background: PIN_COLOR, color: '#fff', fontSize: 11, fontWeight: 600, textAlign: 'center' }}>{n}</span>
+  );
+  /** 卡片点文字：选中并把色块滚到视口中间 */
+  const locate = (b: EventBar) => {
+    setSelectedId(String(b.e.eventId));
+    if (scrollRef.current) scrollRef.current.scrollLeft = Math.max(0, x((b.from + b.to) / 2) + LABEL_W - scrollRef.current.clientWidth / 2);
+  };
+  /** 对比栏：固定的事件图片并排，按事件时间排序 */
+  const pinBar = () => {
+    const bars = pinnedBars;
+    if (!bars.length) return null;
+    return (
+      <div data-testid="tl-pinbar" style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8, padding: 8, background: '#fafafa', border: '1px solid #f0f0f0', borderRadius: 4 }}>
+        {bars.map((b) => {
+          const id = String(b.e.eventId);
+          const lit = hover?.kind === 'e' && hover.key === id;
+          return (
+            // 悬停卡片 ⇄ 高亮对应色块（共用 hover 状态）
+            <div key={id} data-testid={`tl-pin-card-${id}`} onMouseEnter={() => setHover({ kind: 'e', key: id })} onMouseLeave={() => setHover(null)}
+              style={{ width: 240, fontSize: 12, lineHeight: '18px', border: `${lit ? 2 : 1}px solid ${lit ? PIN_COLOR : id === String(event?.eventId) ? '#f5222d' : '#e8e8e8'}`, borderRadius: 4, background: '#fff', padding: lit ? 3 : 4 }}>
+              {b.e.imageUrl
+                ? <img src={b.e.imageUrl} alt="" title="点击看大图" onClick={() => setPreviewUrl(b.e.imageUrl!)} style={{ display: 'block', width: '100%', height: 150, objectFit: 'contain', background: '#000', borderRadius: 2, cursor: 'zoom-in' }} />
+                : <div style={{ height: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', background: '#f5f5f5' }}>无图片</div>}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                {pinBadge(pinNo.get(id) || 0)}
+                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }} title="定位到该事件" onClick={() => locate(b)}>
+                  #{id} · {b.e.workName || '-'} · {rangeText(b)}
+                </span>
+                <a onClick={() => togglePin(id)} title="移出对比栏">✕</a>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', color: '#888' }}>
+                <span style={{ flex: 1 }}>{RISK_LABELS[b.e.riskLevel || ''] || '-'} · {durText(b)}{b.e.primaryMarkType ? ` · ${PRIMARY_LABELS[b.e.primaryMarkType] || b.e.primaryMarkType}` : ''}</span>
+                <a data-testid={`tl-pin-monitor-${id}`} onClick={() => openMonitor(b.e)}>查看监控</a>
+              </div>
+            </div>
+          );
+        })}
+        <Space direction="vertical" size={4}>
+          <span style={{ color: '#999', fontSize: 12 }}>对比栏 {bars.length}/{PIN_MAX}</span>
+          <Button size="small" onClick={() => setPinIds([])}>清空</Button>
+        </Space>
       </div>
     );
   };
@@ -345,6 +434,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
       <div style={{ marginBottom: 8 }}>
         <Segmented size="small" value={scale} options={SCALES} onChange={(v) => setScale(Number(v))} />
       </div>
+      {pinBar()}
       <div ref={scrollRef} style={{ overflowX: 'auto', border: '1px solid #f0f0f0', position: 'relative' }}>
         <div style={{ position: 'relative', width: width + LABEL_W }}>
           {/* 覆盖层：附近范围、时间窗口、当前事件时间线 */}
@@ -366,15 +456,26 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
             const isCur = String(b.e.eventId) === String(event.eventId);
             const mark = b.e.primaryMarkType ? MARK_STYLES[b.e.primaryMarkType] : undefined;
             const left = x(b.from), w = Math.max(3, x(b.to) - x(b.from)), top = ri * EV_ROW_H + 4;
+            const id = String(b.e.eventId);
+            const selected = selectedId === id, no = pinNo.get(id);
+            const lit = !!no && hover?.kind === 'e' && hover.key === id;
+            // 当前事件不改色（与图例一致），只加细边框；选中=蓝描边，已固定对比=紫描边（与卡片互相悬停时加粗）
+            const ring = [isCur ? 'inset 0 0 0 1px rgba(0,0,0,0.6)' : '', selected ? '0 0 0 2px #1677ff' : no ? `0 0 0 ${lit ? 3 : 2}px ${PIN_COLOR}` : ''].filter(Boolean).join(', ');
             return [
-              <Tooltip key={b.e.eventId} title={eventTip(b)} overlayStyle={{ maxWidth: 320 }} open={previewUrl || reviewing ? false : undefined}>
-                <div onClick={() => openDetail(String(b.e.eventId))} onMouseEnter={() => setHover({ kind: 'e', key: String(b.e.eventId) })} onMouseLeave={() => setHover(null)}
-                  style={{ position: 'absolute', left, width: w, top, height: EV_BAR_H, cursor: 'pointer', zIndex: isCur ? 2 : 1,
-                  // 当前事件不改色（与图例一致），只加细边框
-                  background: barColor(b.e), borderRadius: 2, boxShadow: isCur ? 'inset 0 0 0 1px rgba(0,0,0,0.6)' : undefined,
-                  opacity: b.hasDuration ? 1 : 0.6, overflow: 'hidden', whiteSpace: 'nowrap', lineHeight: `${EV_BAR_H}px` }}>
-                </div>
-              </Tooltip>,
+              <Popover key={b.e.eventId} trigger="click" placement="bottom" content={eventPopover(b)}
+                open={selected && !previewUrl} onOpenChange={(v) => setSelectedId((sid) => (v ? id : sid === id ? null : sid))}>
+                <Tooltip title={eventTip(b)} overlayStyle={{ maxWidth: 320 }} open={selected || previewUrl || reviewing ? false : undefined}>
+                  <div data-testid={`tl-event-${id}`} onMouseEnter={() => setHover({ kind: 'e', key: id })} onMouseLeave={() => setHover(null)}
+                    style={{ position: 'absolute', left, width: w, top, height: EV_BAR_H, cursor: 'pointer', zIndex: selected ? 3 : isCur ? 2 : 1,
+                    background: barColor(b.e), borderRadius: 2, boxShadow: ring || undefined,
+                    opacity: b.hasDuration ? 1 : 0.6, overflow: 'hidden', whiteSpace: 'nowrap', lineHeight: `${EV_BAR_H}px` }}>
+                  </div>
+                </Tooltip>
+              </Popover>,
+              // 固定编号：色块左上角，与对比栏卡片编号一致
+              no && (
+                <div key={`${b.e.eventId}-pin`} style={{ position: 'absolute', left: left - 8, top: top - 7, zIndex: 4, pointerEvents: 'none' }}>{pinBadge(no)}</div>
+              ),
               (mark || isDyeEvent(b.e)) && (
                 <div key={`${b.e.eventId}-mark`} style={{ position: 'absolute', left: left + w / 2, top: top + EV_BAR_H + 2, transform: 'translateX(-50%)', fontSize: MARK_FONT, lineHeight: '12px',
                   color: mark?.fg, fontWeight: b.e.primaryMarkType === 'PRIVATE_ORDER' ? 600 : undefined, whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 2 }}>{isDyeEvent(b.e) ? <DyeMark /> : null}{mark?.text}</div>
@@ -416,7 +517,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
         {legendRows.map(([k, v]) => [<span key={`${k}-k`} style={{ color: '#999' }}>{k}</span>, <Space key={`${k}-v`} size={16} wrap>{v}</Space>])}
       </div>
       <div style={{ color: '#999', fontSize: 12, marginTop: 6 }}>
-        AI 事件条长 = 事件时长（去重丢弃的事件不在检测结果中，不显示）；订单受上方状态/订单号筛选影响；点事件看详情，点订单看订单详情。仅供人工初筛，不参与计算。
+        AI 事件条长 = 事件时长（去重丢弃的事件不在检测结果中，不显示）；订单受上方状态/订单号筛选影响；悬停事件看摘要，点事件弹出图片与操作（详情/监控/固定对比/标记，Esc 关闭），点订单看订单详情。仅供人工初筛，不参与计算。
       </div>
       {previewUrl && <Image src={previewUrl} style={{ display: 'none' }} preview={{ visible: true, src: previewUrl, onVisibleChange: (v) => { if (!v) setPreviewUrl(null); } }} />}
     </div>
