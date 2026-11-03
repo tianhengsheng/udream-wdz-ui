@@ -461,8 +461,8 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
     </span>
   );
   const legendRows: [string, React.ReactNode[]][] = [
-    ['事件', [item(RED, '高/私单'), item(ORANGE, '中'), item(GREEN, '低风险'), item(GREY, '无效')]],
-    ['订单', [item(ORDER_WINDOW, '窗口'), item(ORDER_NEAR, '附近'),item(ORDER_OFF, '不参与计算'), item(waitColor(ORDER_NEAR), '排队等待(同订单色)', WAIT_H), item('#000', '支付', 8, 2)]],
+    ['事件', [item(RED, '高风险'), item(ORANGE, '中风险'), item(GREEN, '低风险'), item(GREY, '无效')]],
+    ['订单', [item(ORDER_WINDOW, '窗口'), item(ORDER_NEAR, '附近'),item(ORDER_OFF, '不参与计算'), item(waitColor(ORDER_NEAR), '排队等待', WAIT_H), item('#000', '支付', 8, 2)]],
     ['标记', [item(MARK_FG.private, '私单'), item(MARK_FG.kept, '无风险/不合规'), item(MARK_FG.dropped, '互剪/重修/无效/重复'), item('#722ed1', '烫染'), item(MULTI_COLOR, '多项目'), item(WASH_COLOR, '洗吹(条变淡)'), linkItem(false, '标记关联订单'), linkItem(true, '备注订单')]],
     ['底色', [item('rgba(250,173,20,0.35)', `窗口 ${params.window}′`), item('rgba(22,119,255,0.18)', `附近 ±${params.nearby}′`), <span key="cur" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
       <span style={{ width: 10, display: 'inline-flex', justifyContent: 'center' }}><i style={{ height: 8, borderLeft: '1px dashed #f5222d' }} /></span>当前事件起止
