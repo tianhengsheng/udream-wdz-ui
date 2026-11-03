@@ -584,7 +584,8 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
             const sx = b.start != null ? x(b.start) - x(b.from) : 0, sw = b.start != null ? Math.max(3, x(b.end ?? b.start + 1) - x(b.start)) : 6;
             return (
               // 每段各挂 Tooltip，箭头对准悬停的那一段
-              <div key={k} onClick={() => onOrderClick(b.o)} onMouseEnter={() => setHover({ kind: 'o', key: k })} onMouseLeave={() => setHover(null)} style={{ position: 'absolute', left: x(b.from), width: Math.max(4, x(b.to) - x(b.from)), top, height: ROW_H, cursor: 'pointer', zIndex: 2 }}>
+              // 只在订单块上响应点击：容器上绑点击会被悬浮窗（portal）里的点击冒泡触发
+              <div key={k} onMouseEnter={() => setHover({ kind: 'o', key: k })} onMouseLeave={() => setHover(null)} style={{ position: 'absolute', left: x(b.from), width: Math.max(4, x(b.to) - x(b.from)), top, height: ROW_H, zIndex: 2 }}>
                 {b.create != null && b.start != null && b.start > b.create && (
                   <Tooltip title={orderTip(b, 'wait')}>
                     <div onMouseEnter={enter('wait')} onMouseLeave={enter()}
@@ -604,7 +605,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
                 )}
                 {b.start != null && (
                   <Tooltip title={orderTip(b, 'bar')} overlayStyle={{ maxWidth: 360 }}>
-                    <div onMouseEnter={enter('bar')} onMouseLeave={enter()} style={{ position: 'absolute', left: x(b.start) - x(b.from), width: Math.max(3, x(b.end ?? b.start + 1) - x(b.start)), top: 5, height: ROW_H - 10, background: color, borderRadius: BAR_R,
+                    <div onClick={() => onOrderClick(b.o)} onMouseEnter={enter('bar')} onMouseLeave={enter()} style={{ position: 'absolute', cursor: 'pointer', left: x(b.start) - x(b.from), width: Math.max(3, x(b.end ?? b.start + 1) - x(b.start)), top: 5, height: ROW_H - 10, background: color, borderRadius: BAR_R,
                       boxShadow: hl('bar', color), opacity: isWashOrder(b.o) ? 0.4 : calc ? 1 : 0.7, fontSize: 10, color: '#fff', overflow: 'hidden', whiteSpace: 'nowrap', lineHeight: `${ROW_H - 10}px`, paddingLeft: 2 }}>
                       {x(b.end ?? b.start) - x(b.start) > 36 ? (b.o.queuedNo || '') : ''}
                     </div>
@@ -612,7 +613,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
                 )}
                 {b.start == null && (
                   <Tooltip title={orderTip(b, 'bar')}>
-                    <div style={{ position: 'absolute', left: 0, width: 6, top: 7, height: ROW_H - 14, border: `1px dashed ${color}`, borderRadius: BAR_R }} />
+                    <div onClick={() => onOrderClick(b.o)} style={{ position: 'absolute', cursor: 'pointer', left: 0, width: 6, top: 7, height: ROW_H - 14, border: `1px dashed ${color}`, borderRadius: BAR_R }} />
                   </Tooltip>
                 )}
                 {b.pay != null && (
