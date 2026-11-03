@@ -449,22 +449,22 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
   );
 
   // 图例统一为「色块 + 文字」：色块统一占 14px 宽居中，文字统一灰黑
-  const item = (c: string, t: React.ReactNode, h = 8, w = 14) => (
-    <span key={String(t)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-      <span style={{ width: 14, display: 'inline-flex', justifyContent: 'center' }}><i style={{ width: w, height: h, background: c, borderRadius: 1 }} /></span>{t}
+  const item = (c: string, t: React.ReactNode, h = 6, w = 10) => (
+    <span key={String(t)} style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+      <span style={{ width: 10, display: 'inline-flex', justifyContent: 'center' }}><i style={{ width: w, height: h, background: c, borderRadius: 1 }} /></span>{t}
     </span>
   );
   const linkItem = (dashed: boolean, t: string) => (
     <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-      <svg width={18} height={8}><line x1={1} y1={4} x2={17} y2={4} stroke="#8c8c8c" strokeWidth={1.5} strokeDasharray={dashed ? '3 2' : undefined} /></svg>{t}
+      <svg width={12} height={6}><line x1={0} y1={3} x2={12} y2={3} stroke="#bfbfbf" strokeWidth={1.5} strokeDasharray={dashed ? '3 2' : undefined} /></svg>{t}
     </span>
   );
   const legendRows: [string, React.ReactNode[]][] = [
     ['事件', [item(RED, '高/私单'), item(ORANGE, '中'), item(GREEN, '预警/低/无风险/不合规'), item(GREY, '无效/互剪/重修/重复')]],
-    ['订单', [item(ORDER_WINDOW, '窗口'), item(ORDER_NEAR, '附近'), item(ORDER_OTHER, '其他计算'), item(ORDER_OFF, '不参与计算'), item(waitColor(ORDER_NEAR), '排队等待(同订单色)', WAIT_H), item('#000', '支付', 10, 2)]],
+    ['订单', [item(ORDER_WINDOW, '窗口'), item(ORDER_NEAR, '附近'), item(ORDER_OTHER, '其他计算'), item(ORDER_OFF, '不参与计算'), item(waitColor(ORDER_NEAR), '排队等待(同订单色)', WAIT_H), item('#000', '支付', 8, 2)]],
     ['标记', [item(MARK_FG.private, '私单'), item(MARK_FG.kept, '无风险/不合规'), item(MARK_FG.dropped, '互剪/重修/无效/重复'), item('#722ed1', '烫染'), item(MULTI_COLOR, '多项目'), item(WASH_COLOR, '洗吹(条变淡)'), linkItem(false, '标记关联订单'), linkItem(true, '备注订单')]],
     ['底色', [item('rgba(250,173,20,0.35)', `窗口 ${params.window}′`), item('rgba(22,119,255,0.18)', `附近 ±${params.nearby}′`), <span key="cur" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-      <span style={{ width: 14, display: 'inline-flex', justifyContent: 'center' }}><i style={{ height: 10, borderLeft: '1px dashed #f5222d' }} /></span>当前事件起止
+      <span style={{ width: 10, display: 'inline-flex', justifyContent: 'center' }}><i style={{ height: 8, borderLeft: '1px dashed #f5222d' }} /></span>当前事件起止
     </span>]],
   ];
 
@@ -637,12 +637,12 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
           {!eventLanes.length && !orderLanes.length && <div style={{ padding: 24, color: '#999' }}>暂无数据</div>}
         </div>
       </div>
-      {/* 图例放下方，按类分行 */}
-      <div style={{ fontSize: 12, marginTop: 8, display: 'grid', gridTemplateColumns: 'auto 1fr', rowGap: 6, columnGap: 12, color: '#595959' }}>
-        {legendRows.map(([k, v]) => [<span key={`${k}-k`} style={{ color: '#999' }}>{k}</span>, <Space key={`${k}-v`} size={16} wrap>{v}</Space>])}
-      </div>
-      <div style={{ color: '#999', fontSize: 12, marginTop: 6 }}>
-        AI 事件条长 = 事件时长（去重丢弃的事件不在检测结果中，不显示）；订单受上方状态/订单号筛选影响；悬停事件看摘要，点事件弹出图片与操作（详情/监控/固定对比/标记，Esc 关闭），点订单看订单详情。仅供人工初筛，不参与计算。
+      {/* 图例弱化：小字浅灰、色块缩小、行距收紧 */}
+      <div style={{ fontSize: 11, lineHeight: '16px', marginTop: 6, display: 'grid', gridTemplateColumns: 'auto 1fr', rowGap: 2, columnGap: 10, color: '#8c8c8c' }}>
+        {legendRows.map(([k, v]) => [
+          <span key={`${k}-k`} style={{ color: '#bfbfbf' }}>{k}</span>,
+          <Space key={`${k}-v`} size={12} wrap>{v}</Space>,
+        ])}
       </div>
       {previewUrl && <Image src={previewUrl} style={{ display: 'none' }} preview={{ visible: true, src: previewUrl, onVisibleChange: (v) => { if (!v) setPreviewUrl(null); } }} />}
     </div>
