@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Image, Popover, Segmented, Space, Spin, Tooltip, message } from 'antd';
+import { VideoCameraOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { pageBehaviorRules, pageReviewRecords, pageRiskEventItems } from '../../api/wdz';
 import { APP, PRIMARY_LABELS, RISK_LABELS } from '../../constants/marks';
@@ -38,6 +39,13 @@ const MARK_FONT = 10, EV_ROW_H = 34, EV_BAR_H = 14;
 /** 对比栏最多固定张数，超出挤掉最早的 */
 const PIN_MAX = 3;
 const PRIVATE_COLOR = '#a8071a', ORDER_WINDOW = '#08979c', ORDER_NEAR = '#4a6285', ORDER_OTHER = '#9fb4cc', ORDER_OFF = '#d9d9d9';
+/** 排队等待线：加粗、取所属订单色半透明，起点圆点 = 下单时间 */
+/** 时长：满 1 小时显示「X 小时 Y 分钟」 */
+const minText = (min: number) => { const v = Math.round(min), h = Math.floor(v / 60), r = v % 60; return h ? `${h} 小时${r ? ` ${r} 分钟` : ''}` : `${r} 分钟`; };
+const WAIT_H = 4;
+/** 事件/订单色块圆角（0 = 直角） */
+const BAR_R = 0;
+const waitColor = (c: string) => (c === ORDER_OFF ? '#bfbfbf' : `${c}8c`);
 const SCALES = [{ label: '全天', value: 0.8 }, { label: '标准', value: 2 }, { label: '放大', value: 5 }];
 const LABEL_W = 120, ROW_H = 24, DAY_END = 27 * 60; // 次日 03:00
 /** 烫染在色块/订单条下方加「染」字标识（条外，短条也不遗漏），颜色仍表达风险/匹配 */
@@ -45,23 +53,29 @@ const isDyeEvent = (e: RiskEvent) => e.serviceType === '染发';
 const isDyeOrder = (o: EventOrder) => o.itemCategory === 1;
 const DyeText = () => <span style={{ color: '#b37feb', fontWeight: 600 }}>烫染</span>;
 const PrivateMark = () => <span style={{ fontSize: 9, lineHeight: '12px', padding: '0 2px', marginRight: 3, background: PRIVATE_COLOR, color: '#fff', borderRadius: 2 }}>私</span>;
-const DyeMark = () => <span style={{ fontSize: 9, lineHeight: '12px', padding: '0 2px', marginRight: 2, background: '#722ed1', color: '#fff', borderRadius: 2 }}>染</span>;
+/** 条下方小标签：悬停给释义，方便新用户（容器 pointerEvents:none，标签自身单独打开） */
+const TagMark = ({ text, bg, tip }: { text: string; bg: string; tip: React.ReactNode }) => (
+  <Tooltip title={tip}><span style={{ fontSize: 9, lineHeight: '12px', padding: '0 2px', marginRight: 2, background: bg, color: '#fff', borderRadius: 2, pointerEvents: 'auto', cursor: 'help' }}>{text}</span></Tooltip>
+);
+const DyeMark = ({ event }: { event?: boolean }) => <TagMark text="染" bg="#722ed1" tip={event ? '烫染事件' : '烫染订单'} />;
 /** 多服务项目订单（服务项目名按逗号/顿号拆分超过 1 项），条下方加「多」字 */
 const itemCount = (o: EventOrder) => (o.serviceItemName || '').split(/[,，、]/).filter((v) => v.trim()).length;
 const isMultiOrder = (o: EventOrder) => itemCount(o) > 1;
 const MULTI_COLOR = '#c41d7f';
-const MultiMark = () => <span style={{ fontSize: 9, lineHeight: '12px', padding: '0 2px', marginRight: 2, background: MULTI_COLOR, color: '#fff', borderRadius: 2 }}>多</span>;
+const MultiMark = ({ o }: { o: EventOrder }) => <TagMark text="多" bg={MULTI_COLOR} tip={`多项目订单（${itemCount(o)} 项）：${o.serviceItemName || '-'}`} />;
 /** 订单泳道含烫染/多项目单时加高，给条下方的标识留位 */
 const OD_DYE_ROW_H = 34;
 /** 纯洗吹单（含「洗」不含「剪」、非烫染）：大多不上报 AI 事件，条变淡并加「洗」字 */
 const isWashOrder = (o: EventOrder) => !isDyeOrder(o) && /洗|冲/.test(o.serviceItemName || '') && !/剪/.test(o.serviceItemName || '');
 const WASH_COLOR = '#4096ff';
-const WashMark = () => <span style={{ fontSize: 9, lineHeight: '12px', padding: '0 2px', marginRight: 2, background: WASH_COLOR, color: '#fff', borderRadius: 2 }}>洗</span>;
+const WashMark = () => <TagMark text="洗" bg={WASH_COLOR} tip="纯洗吹订单：大多不上报 AI 事件，条变淡显示" />;
 const hasOrderTag = (o: EventOrder) => isDyeOrder(o) || isMultiOrder(o) || isWashOrder(o);
 const orderRowH = (lane: Lane<OrderBar>) => (lane.rows.some((r) => r.some((b) => hasOrderTag(b.o))) ? OD_DYE_ROW_H : ROW_H);
 
 interface Lane<T> { name: string; rows: T[][] }
 interface OrderBar { o: EventOrder; create?: number; start?: number; end?: number; pay?: number; corrected?: number; from: number; to: number }
+/** 订单条分段悬停：等待线 / 服务条 / 支付刻度 */
+type OrderPart = 'create' | 'wait' | 'bar' | 'pay';
 interface EventBar { e: RiskEvent; from: number; to: number; hasDuration: boolean }
 /** 事件→订单关联：mark=标记时选的关联订单（实线），remark=备注里识别的订单号（虚线） */
 interface Link { eventId: string; orderKey: string; source: 'mark' | 'remark'; color: string }
@@ -111,7 +125,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
   const [pinIds, setPinIds] = useState<string[]>([]);
   /** 事件 ID → 最新一条初核/复核记录的备注 */
   const [remarks, setRemarks] = useState<Map<string, { first?: string; second?: string }>>(new Map());
-  const [hover, setHover] = useState<{ kind: 'e' | 'o'; key: string } | null>(null);
+  const [hover, setHover] = useState<{ kind: 'e' | 'o'; key: string; part?: OrderPart } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const base = useMemo(() => (event?.eventTime ? dayjs(String(event.eventTime).slice(0, 10)) : null), [event?.eventTime]);
   const m = (t?: string | null) => (t && base ? dayjs(t).diff(base, 'second') / 60 : undefined);
@@ -235,7 +249,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
       const c = (b.from + b.to) / 2;
       return { b, from: c - half, to: c + half };
     })).map((row) => row.map((it) => it.b));
-    return [...g.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, items]) => ({ name: `AI · ${name}`, rows: packLabeled(items) }));
+    return [...g.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, items]) => ({ name, rows: packLabeled(items) }));
   }, [eventBars, scale]);
   const orderLanes: Lane<OrderBar>[] = useMemo(() => {
     const g = new Map<string, OrderBar[]>();
@@ -264,38 +278,69 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
   }, [scale, ready, axisStart]);
 
   const line = { fontSize: 12, lineHeight: '18px' };
-  const orderTip = (b: OrderBar) => {
+  const orderTip = (b: OrderBar, part?: OrderPart) => {
     const match = b.o.matchType === 'WINDOW' ? '窗口订单' : b.o.matchType === 'NEARBY' ? '附近订单' : '';
-    const corrected = b.o.correctedStartTime && b.o.correctedStartTime !== b.o.serviceStartTime ? `（矫正 ${hm(b.o.correctedStartTime)}）` : '';
+    const corrected = b.o.correctedStartTime && b.o.correctedStartTime !== b.o.serviceStartTime ? hm(b.o.correctedStartTime) : '';
+    // 分段提示：等待线只给等待时长、支付刻度只给支付时间，其余归服务条
+    if (part === 'wait' && b.create != null && b.start != null) return <div style={line}>排队等待 {minText(b.start - b.create)}</div>;
+    if (part === 'create') return <div style={line}>下单 {hm(b.o.orderCreateTime)}</div>;
+    if (part === 'pay') return <div style={line}>支付 {hm(b.o.payTime)}</div>;
+    const svcMin = b.start != null && b.end != null ? Math.round(b.end - b.start) : null;
+    // 订单卡片：标题行（单号+状态）+ 字段表 + 关联事件
+    const chip = (t: string, c: string) => <span style={{ fontSize: 11, lineHeight: '16px', padding: '0 5px', borderRadius: 3, border: `1px solid ${c}`, color: c }}>{t}</span>;
+    const row = (k: string, v: React.ReactNode) => (
+      <div style={{ display: 'flex', gap: 8 }}><span style={{ width: 40, flex: 'none', color: 'rgba(255,255,255,0.45)' }}>{k}</span><span style={{ flex: 1 }}>{v}</span></div>
+    );
+    const orderLinks = links.filter((l) => l.orderKey === orderKeyOf(b.o));
     return (
-      <div style={line}>
-        {links.filter((l) => l.orderKey === orderKeyOf(b.o)).map((l) => {
-          const e = dayEvents.find((x) => String(x.eventId) === l.eventId);
-          return <div key={l.eventId} style={{ color: '#ffd666' }}>关联事件 #{l.eventId} · {MARK_STYLES[e?.primaryMarkType || '']?.text || '未标记'} · 来自{l.source === 'mark' ? '标记' : '备注'}</div>;
-        })}
-        <div><b>{b.o.queuedNo || '-'}</b> · {b.o.craftsmanName || '-'} · {b.o.orderStatus || '-'}{match ? ` · ${match}` : ''}</div>
-        <div>{isDyeOrder(b.o) ? <><DyeText /> · </> : null}{isWashOrder(b.o) ? <><span style={{ color: '#69b1ff', fontWeight: 600 }}>洗吹</span> · </> : null}{isMultiOrder(b.o) ? <><span style={{ color: '#ff85c0', fontWeight: 600 }}>{itemCount(b.o)}项</span> · </> : null}{b.o.serviceItemName || '-'} · {money(b.o.orderAmount)}</div>
-        <div>排队 {hm(b.o.orderCreateTime)} → 服务 {hm(b.o.serviceStartTime)}{corrected} ~ {hm(b.o.serviceEndTime)}</div>
-        {b.o.payTime && <div>支付 {hm(b.o.payTime)}</div>}
-        <div style={{ color: '#aaa' }}>{b.o.orderNo || ''}</div>
+      <div style={{ ...line, minWidth: 240 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6, marginBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.15)' }}>
+          <span style={{ color: 'rgba(255,255,255,0.45)' }}>订单</span><b style={{ fontSize: 14 }}>{b.o.queuedNo || '-'}</b>
+          <span style={{ flex: 1 }} />
+          {b.o.orderStatus && chip(b.o.orderStatus, '#95de64')}{match && chip(match, '#91caff')}
+        </div>
+        {row('发型师', b.o.craftsmanName || '-')}
+        {row('项目', <>{isDyeOrder(b.o) ? <><DyeText /> · </> : null}{isWashOrder(b.o) ? <><span style={{ color: '#69b1ff', fontWeight: 600 }}>洗吹</span> · </> : null}{isMultiOrder(b.o) ? <><span style={{ color: '#ff85c0', fontWeight: 600 }}>{itemCount(b.o)}项</span> · </> : null}{b.o.serviceItemName || '-'}</>)}
+        {row('金额', money(b.o.orderAmount))}
+        {row('服务', <>{hm(b.o.serviceStartTime)} ~ {hm(b.o.serviceEndTime)}{svcMin != null ? <span style={{ color: 'rgba(255,255,255,0.45)' }}> · {minText(svcMin)}</span> : null}{corrected ? <div style={{ color: 'rgba(255,255,255,0.45)' }}>矫正开始 {corrected}</div> : null}</>)}
+        {row('单号', <span style={{ color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace' }}>{b.o.orderNo || '-'}</span>)}
+        {orderLinks.length > 0 && (
+          <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+            {orderLinks.map((l) => {
+              const e = dayEvents.find((x) => String(x.eventId) === l.eventId);
+              return <div key={l.eventId} style={{ color: '#ffd666' }}>关联事件 #{l.eventId} · {MARK_STYLES[e?.primaryMarkType || '']?.text || '未标记'} · 来自{l.source === 'mark' ? '标记' : '备注'}</div>;
+            })}
+          </div>
+        )}
       </div>
     );
   };
-  const durText = (b: EventBar) => (b.hasDuration ? `${Math.round((b.e.serviceDurationSeconds || 0) / 60)} 分钟` : '未知');
+  const durText = (b: EventBar) => (b.hasDuration ? minText((b.e.serviceDurationSeconds || 0) / 60) : '未知');
   const rangeText = (b: EventBar) => `${b.hasDuration ? `${hm(dayjs(b.e.eventTime).subtract(b.e.serviceDurationSeconds || 0, 'second').format('YYYY-MM-DD HH:mm:ss'))} ~ ` : ''}${hm(b.e.eventTime)}`;
   /** 事件文字摘要：悬停提示与点击浮层共用 */
   const eventInfo = (b: EventBar, dark: boolean) => {
     const risk = RISK_LABELS[b.e.riskLevel || ''] || b.e.riskLevel || '-';
+    const rc = RISK_COLORS[b.e.riskLevel || ''] || GREY;
     const rm = remarks.get(String(b.e.eventId));
+    // 事件卡片：与订单卡片同款（标题行 + 字段表），悬停深色、点击浮层浅色
+    const muted = dark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)', divider = dark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.06)';
+    const row = (k: string, v: React.ReactNode) => (
+      <div style={{ display: 'flex', gap: 8 }}><span style={{ width: 40, flex: 'none', color: muted }}>{k}</span><span style={{ flex: 1, minWidth: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{v}</span></div>
+    );
     return (
-      <>
-        <div><b>#{b.e.eventId}</b> · {b.e.workName || '-'} · {isDyeEvent(b.e) ? <DyeText /> : (b.e.serviceType || b.e.checkType || '-')}</div>
-        <div>{risk}{b.e.riskScore != null ? ` ${b.e.riskScore} 分` : ''} · 时长 {durText(b)}</div>
-        <div>{rangeText(b)}</div>
-        {b.e.primaryMarkType && <div>已标记：{PRIMARY_LABELS[b.e.primaryMarkType] || b.e.primaryMarkType}</div>}
-        {rm?.first && <div style={{ color: dark ? '#ffd666' : '#d48806', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>初核：{rm.first}</div>}
-        {rm?.second && <div style={{ color: dark ? '#ff7875' : '#cf1322', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>复核：{rm.second}</div>}
-      </>
+      <div style={{ minWidth: 240 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6, marginBottom: 6, borderBottom: `1px solid ${divider}` }}>
+          <span style={{ color: muted }}>AI 事件</span><b style={{ fontSize: 14 }}>#{b.e.eventId}</b>
+          <span style={{ flex: 1 }} />
+          <span style={{ fontSize: 11, lineHeight: '16px', padding: '0 5px', borderRadius: 3, background: rc, color: rc === GREEN || rc === GREY ? '#1f1f1f' : '#fff' }}>{risk}{b.e.riskScore != null ? ` ${b.e.riskScore} 分` : ''}</span>
+        </div>
+        {row('工位', b.e.workName || '-')}
+        {row('类型', isDyeEvent(b.e) ? <DyeText /> : (b.e.serviceType || b.e.checkType || '-'))}
+        {row('时间', <>{rangeText(b)}<span style={{ color: muted }}> · {durText(b)}</span></>)}
+        {b.e.primaryMarkType && row('标记', PRIMARY_LABELS[b.e.primaryMarkType] || b.e.primaryMarkType)}
+        {rm?.first && row('初核', <span style={{ color: dark ? '#ffd666' : '#d48806' }}>{rm.first}</span>)}
+        {rm?.second && row('复核', <span style={{ color: dark ? '#ff7875' : '#cf1322' }}>{rm.second}</span>)}
+      </div>
     );
   };
   /** 悬停：只看文字 */
@@ -372,10 +417,27 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
     );
   };
 
-  const laneBlock = (name: string, rowCount: number, children: React.ReactNode, key: string, tint?: string, privateLane = false, rowH = ROW_H) => (
-    <div key={key} style={{ display: 'flex', borderBottom: '1px solid #f0f0f0', background: tint }}>
-      <div style={{ width: LABEL_W, boxSizing: 'border-box', flex: 'none', position: 'sticky', left: 0, zIndex: 3, background: tint || '#fff', padding: '0 6px', fontSize: 12, lineHeight: `${rowH}px`, borderRight: '1px solid #f0f0f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        color: privateLane ? PRIVATE_COLOR : undefined, fontWeight: privateLane ? 600 : undefined }} title={name}>{privateLane ? <PrivateMark /> : null}{name}</div>
+  /** 泳道左侧标签：名称 + 右侧计数；AI 泳道带「AI」标识，分组末行底线加深（不改高度，连线坐标不受影响） */
+  type LaneMeta = { label?: React.ReactNode; count?: string; ai?: boolean; groupEnd?: boolean; muted?: boolean; avatar?: string | null };
+  const AVATAR = 20;
+  const laneBlock = (name: string, rowCount: number, children: React.ReactNode, key: string, tint?: string, privateLane = false, rowH = ROW_H, meta: LaneMeta = {}) => (
+    <div key={key} style={{ display: 'flex', borderBottom: `1px solid ${meta.groupEnd ? '#d9d9d9' : '#f0f0f0'}`, background: tint }}>
+      <div style={{ width: LABEL_W, boxSizing: 'border-box', flex: 'none', position: 'sticky', left: 0, zIndex: 3, background: tint || '#fff', padding: '0 8px', fontSize: 12, height: rowCount * rowH, borderRight: '1px solid #f0f0f0',
+        display: 'flex', alignItems: 'flex-start', gap: 4, lineHeight: `${Math.min(rowH, 30)}px`, color: privateLane ? PRIVATE_COLOR : meta.muted ? '#8c8c8c' : '#262626', fontWeight: privateLane ? 600 : undefined }} title={name}>
+        {privateLane ? <span><PrivateMark /></span> : null}
+        {meta.avatar !== undefined && (
+          // 发型师头像（点开大图）；无图时用姓氏首字占位
+          <span style={{ flex: 'none', width: AVATAR, height: AVATAR, marginTop: (Math.min(rowH, 30) - AVATAR) / 2, borderRadius: '50%', overflow: 'hidden', background: '#e6f4ff', color: '#1677ff', fontSize: 11, lineHeight: `${AVATAR}px`, textAlign: 'center', fontWeight: 600 }}>
+            {meta.avatar ? <Image src={meta.avatar} width={AVATAR} height={AVATAR} style={{ objectFit: 'cover', display: 'block' }} preview={{ mask: null }} /> : name.slice(0, 1)}
+          </span>
+        )}
+        {meta.ai ? (
+          // AI 工位：摄像头图标，与发型师头像同尺寸圆形
+          <span title="AI 摄像头检测工位" style={{ flex: 'none', width: AVATAR, height: AVATAR, marginTop: (Math.min(rowH, 30) - AVATAR) / 2, borderRadius: '50%', background: '#fff7e6', border: '1px solid #ffd591', boxSizing: 'border-box', color: '#d46b08', fontSize: 11, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><VideoCameraOutlined /></span>
+        ) : null}
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: meta.muted ? undefined : 500 }}>{meta.label ?? name}</span>
+        {meta.count ? <span style={{ flex: 'none', fontSize: 11, color: '#8c8c8c', fontWeight: 400 }}>{meta.count}</span> : null}
+      </div>
       <div style={{ position: 'relative', width, height: rowCount * rowH, flex: 'none' }}>{children}</div>
     </div>
   );
@@ -393,7 +455,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
   );
   const legendRows: [string, React.ReactNode[]][] = [
     ['事件', [item(RED, '高/私单'), item(ORANGE, '中'), item(GREEN, '预警/低/无风险/不合规'), item(GREY, '无效/互剪/重修/重复')]],
-    ['订单', [item(ORDER_WINDOW, '窗口'), item(ORDER_NEAR, '附近'), item(ORDER_OTHER, '其他计算'), item(ORDER_OFF, '不参与计算'), item('#bbb', '排队等待', 2), item('#000', '支付', 10, 2)]],
+    ['订单', [item(ORDER_WINDOW, '窗口'), item(ORDER_NEAR, '附近'), item(ORDER_OTHER, '其他计算'), item(ORDER_OFF, '不参与计算'), item(waitColor(ORDER_NEAR), '排队等待(同订单色)', WAIT_H), item('#000', '支付', 10, 2)]],
     ['标记', [item(MARK_FG.private, '私单'), item(MARK_FG.kept, '无风险/不合规'), item(MARK_FG.dropped, '互剪/重修/无效/重复'), item('#722ed1', '烫染'), item(MULTI_COLOR, '多项目'), item(WASH_COLOR, '洗吹(条变淡)'), linkItem(false, '标记关联订单'), linkItem(true, '备注订单')]],
     ['底色', [item('rgba(250,173,20,0.35)', `窗口 ${params.window}′`), item('rgba(22,119,255,0.18)', `附近 ±${params.nearby}′`), <span key="cur" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
       <span style={{ width: 14, display: 'inline-flex', justifyContent: 'center' }}><i style={{ height: 10, borderLeft: '1px dashed #f5222d' }} /></span>当前事件起止
@@ -448,6 +510,10 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
       {pinBar()}
       <div ref={scrollRef} style={{ overflowX: 'auto', border: '1px solid #f0f0f0', position: 'relative' }}>
         <div style={{ position: 'relative', width: width + LABEL_W }}>
+          {/* 纵向网格：整点实线、其余虚线，压在色块之下 */}
+          <div style={{ position: 'absolute', left: LABEL_W, top: ROW_H + 1, bottom: 0, width, pointerEvents: 'none', zIndex: 1 }}>
+            {ticks.map((t) => <i key={t} style={{ position: 'absolute', left: x(t), top: 0, bottom: 0, borderLeft: t % 60 === 0 ? '1px solid rgba(0,0,0,0.06)' : '1px dashed rgba(0,0,0,0.04)' }} />)}
+          </div>
           {/* 覆盖层：附近范围、时间窗口、当前事件时间线 */}
           {cur && (
             <div style={{ position: 'absolute', left: LABEL_W, top: 0, bottom: 0, width, pointerEvents: 'none', zIndex: 1 }}>
@@ -459,11 +525,22 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
             </div>
           )}
           {/* 时间刻度 */}
-          {laneBlock('时间', 1, ticks.map((t) => (
-            <span key={t} style={{ position: 'absolute', left: x(t), top: 0, fontSize: 11, color: '#888', borderLeft: '1px solid #e8e8e8', paddingLeft: 2, height: ROW_H, lineHeight: `${ROW_H}px` }}>{hhmm(t)}</span>
-          )), 'axis', '#fafafa')}
+          {/* 时间刻度：整点深色、半点/刻钟浅色，底部短刻度线 */}
+          {laneBlock('时间', 1, ticks.map((t) => {
+            const hour = t % 60 === 0;
+            return (
+              <span key={t} style={{ position: 'absolute', left: x(t), top: 0, height: ROW_H }}>
+                <span style={{ position: 'absolute', left: 3, top: 0, lineHeight: `${ROW_H - 2}px`, whiteSpace: 'nowrap', fontSize: hour ? 12 : 11, fontWeight: hour ? 500 : undefined, color: hour ? '#595959' : '#bfbfbf' }}>{hhmm(t)}</span>
+                <i style={{ position: 'absolute', left: 0, bottom: 0, height: hour ? 8 : 4, borderLeft: `1px solid ${hour ? '#bfbfbf' : '#d9d9d9'}` }} />
+              </span>
+            );
+          }), 'axis', '#fafafa', false, ROW_H, {
+            muted: true,
+            // 左上角放当前显示总数（受订单状态/订单号筛选影响）
+            label: <span data-testid="tl-totals" style={{ fontSize: 11 }}>事件 <b style={{ color: '#262626' }}>{eventBars.length}</b><span style={{ margin: '0 4px', color: '#d9d9d9' }}>·</span>订单 <b style={{ color: '#262626' }}>{orderBars.length}</b></span>,
+          })}
           {/* AI 事件泳道 */}
-          {eventLanes.map((lane) => laneBlock(lane.name, lane.rows.length, lane.rows.flatMap((row, ri) => row.map((b) => {
+          {eventLanes.map((lane, li) => laneBlock(lane.name, lane.rows.length, lane.rows.flatMap((row, ri) => row.map((b) => {
             const isCur = String(b.e.eventId) === String(event.eventId);
             const mark = b.e.primaryMarkType ? MARK_STYLES[b.e.primaryMarkType] : undefined;
             const left = x(b.from), w = Math.max(3, x(b.to) - x(b.from)), top = ri * EV_ROW_H + 4;
@@ -478,7 +555,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
                 <Tooltip title={eventTip(b)} overlayStyle={{ maxWidth: 320 }} open={selected || previewUrl || reviewing ? false : undefined}>
                   <div data-testid={`tl-event-${id}`} onMouseEnter={() => setHover({ kind: 'e', key: id })} onMouseLeave={() => setHover(null)}
                     style={{ position: 'absolute', left, width: w, top, height: EV_BAR_H, cursor: 'pointer', zIndex: selected ? 3 : isCur ? 2 : 1,
-                    background: barColor(b.e), borderRadius: 2, boxShadow: ring || undefined,
+                    background: barColor(b.e), borderRadius: BAR_R, boxShadow: ring || undefined,
                     opacity: b.hasDuration ? 1 : 0.6, overflow: 'hidden', whiteSpace: 'nowrap', lineHeight: `${EV_BAR_H}px` }}>
                   </div>
                 </Tooltip>
@@ -489,36 +566,66 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
               ),
               (mark || isDyeEvent(b.e)) && (
                 <div key={`${b.e.eventId}-mark`} style={{ position: 'absolute', left: left + w / 2, top: top + EV_BAR_H + 2, transform: 'translateX(-50%)', fontSize: MARK_FONT, lineHeight: '12px',
-                  color: mark?.fg, fontWeight: b.e.primaryMarkType === 'PRIVATE_ORDER' ? 600 : undefined, whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 2 }}>{isDyeEvent(b.e) ? <DyeMark /> : null}{mark?.text}</div>
+                  color: mark?.fg, fontWeight: b.e.primaryMarkType === 'PRIVATE_ORDER' ? 600 : undefined, whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 2 }}>{isDyeEvent(b.e) ? <DyeMark event /> : null}{mark?.text}</div>
               ),
             ];
-          })), `ev-${lane.name}`, '#fffdf5', false, EV_ROW_H))}
+          })), `ev-${lane.name}`, '#fffdf5', false, EV_ROW_H, { ai: true, count: `${lane.rows.flat().length} 个`, groupEnd: li === eventLanes.length - 1 }))}
           {/* 订单泳道（按发型师） */}
           {orderLanes.map((lane) => { const rh = orderRowH(lane); return laneBlock(lane.name, lane.rows.length, lane.rows.flatMap((row, ri) => row.map((b) => {
             const calc = isCalcStatus(b.o.orderStatus);
             const color = !calc ? ORDER_OFF : b.o.matchType === 'WINDOW' ? ORDER_WINDOW : b.o.matchType === 'NEARBY' ? ORDER_NEAR : ORDER_OTHER;
             const top = ri * rh;
             const k = orderKeyOf(b.o);
+            const part = hover?.kind === 'o' && hover.key === k ? hover.part : undefined;
+            const enter = (p?: OrderPart) => () => setHover({ kind: 'o', key: k, part: p });
+            // 悬停高亮统一：形状不变，外加同色光圈
+            const hl = (p: OrderPart, c: string) => (part === p ? `0 0 0 2px ${c === ORDER_OFF ? '#8c8c8c' : c}59` : undefined);
+            const wc = waitColor(color);
             const sx = b.start != null ? x(b.start) - x(b.from) : 0, sw = b.start != null ? Math.max(3, x(b.end ?? b.start + 1) - x(b.start)) : 6;
             return (
-              <Tooltip key={k} title={orderTip(b)}>
-                <div onClick={() => onOrderClick(b.o)} onMouseEnter={() => setHover({ kind: 'o', key: k })} onMouseLeave={() => setHover(null)} style={{ position: 'absolute', left: x(b.from), width: Math.max(4, x(b.to) - x(b.from)), top, height: ROW_H, cursor: 'pointer', zIndex: 2 }}>
-                  {b.create != null && b.start != null && b.start > b.create && (
-                    <div style={{ position: 'absolute', left: 0, width: x(b.start) - x(b.create), top: ROW_H / 2 - 1, height: 2, background: '#bbb' }} />
-                  )}
-                  {b.start != null && (
-                    <div style={{ position: 'absolute', left: x(b.start) - x(b.from), width: Math.max(3, x(b.end ?? b.start + 1) - x(b.start)), top: 5, height: ROW_H - 10, background: color, borderRadius: 2,
-                      opacity: isWashOrder(b.o) ? 0.4 : calc ? 1 : 0.7, fontSize: 10, color: '#fff', overflow: 'hidden', whiteSpace: 'nowrap', lineHeight: `${ROW_H - 10}px`, paddingLeft: 2 }}>
+              // 每段各挂 Tooltip，箭头对准悬停的那一段
+              <div key={k} onClick={() => onOrderClick(b.o)} onMouseEnter={() => setHover({ kind: 'o', key: k })} onMouseLeave={() => setHover(null)} style={{ position: 'absolute', left: x(b.from), width: Math.max(4, x(b.to) - x(b.from)), top, height: ROW_H, cursor: 'pointer', zIndex: 2 }}>
+                {b.create != null && b.start != null && b.start > b.create && (
+                  <Tooltip title={orderTip(b, 'wait')}>
+                    <div onMouseEnter={enter('wait')} onMouseLeave={enter()}
+                      style={{ position: 'absolute', left: 0, width: x(b.start) - x(b.create), top: 0, height: ROW_H }}>
+                      {/* 整行高透明热区，线细也好悬停 */}
+                      <div style={{ position: 'absolute', left: 0, right: 0, top: ROW_H / 2 - WAIT_H / 2, height: WAIT_H, background: wc, borderRadius: BAR_R, boxShadow: hl('wait', color) }} />
+                    </div>
+                  </Tooltip>
+                )}
+                {b.create != null && b.start != null && b.start > b.create && (
+                  <Tooltip title={orderTip(b, 'create')}>
+                    {/* 下单圆点：独立 12px 热区 */}
+                    <div onMouseEnter={enter('create')} onMouseLeave={enter()} style={{ position: 'absolute', left: -4, top: ROW_H / 2 - 6, width: 12, height: 12, zIndex: 1 }}>
+                      <i style={{ position: 'absolute', left: 3, top: 3, width: 6, height: 6, borderRadius: 3, background: '#fff', border: `1.5px solid ${wc}`, boxSizing: 'border-box', boxShadow: hl('create', color) }} />
+                    </div>
+                  </Tooltip>
+                )}
+                {b.start != null && (
+                  <Tooltip title={orderTip(b, 'bar')} overlayStyle={{ maxWidth: 360 }}>
+                    <div onMouseEnter={enter('bar')} onMouseLeave={enter()} style={{ position: 'absolute', left: x(b.start) - x(b.from), width: Math.max(3, x(b.end ?? b.start + 1) - x(b.start)), top: 5, height: ROW_H - 10, background: color, borderRadius: BAR_R,
+                      boxShadow: hl('bar', color), opacity: isWashOrder(b.o) ? 0.4 : calc ? 1 : 0.7, fontSize: 10, color: '#fff', overflow: 'hidden', whiteSpace: 'nowrap', lineHeight: `${ROW_H - 10}px`, paddingLeft: 2 }}>
                       {x(b.end ?? b.start) - x(b.start) > 36 ? (b.o.queuedNo || '') : ''}
                     </div>
-                  )}
-                  {b.start == null && <div style={{ position: 'absolute', left: 0, width: 6, top: 7, height: ROW_H - 14, border: `1px dashed ${color}`, borderRadius: 2 }} />}
-                  {b.pay != null && <div style={{ position: 'absolute', left: x(b.pay) - x(b.from), top: 3, height: ROW_H - 6, borderLeft: '2px solid #000' }} />}
-                  {hasOrderTag(b.o) && <div style={{ position: 'absolute', left: sx + sw / 2, top: ROW_H - 3, transform: 'translateX(-50%)', lineHeight: '12px', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{isDyeOrder(b.o) ? <DyeMark /> : null}{isWashOrder(b.o) ? <WashMark /> : null}{isMultiOrder(b.o) ? <MultiMark /> : null}</div>}
-                </div>
-              </Tooltip>
+                  </Tooltip>
+                )}
+                {b.start == null && (
+                  <Tooltip title={orderTip(b, 'bar')}>
+                    <div style={{ position: 'absolute', left: 0, width: 6, top: 7, height: ROW_H - 14, border: `1px dashed ${color}`, borderRadius: BAR_R }} />
+                  </Tooltip>
+                )}
+                {b.pay != null && (
+                  <Tooltip title={orderTip(b, 'pay')}>
+                    <div onMouseEnter={enter('pay')} onMouseLeave={enter()} style={{ position: 'absolute', left: x(b.pay) - x(b.from) - 3, width: 8, top: 0, height: ROW_H, zIndex: 1 }}>
+                      <i style={{ position: 'absolute', left: 3, top: 3, width: 2, height: ROW_H - 6, background: '#000', boxShadow: hl('pay', '#000000') }} />
+                    </div>
+                  </Tooltip>
+                )}
+                  {hasOrderTag(b.o) && <div style={{ position: 'absolute', left: sx + sw / 2, top: ROW_H - 3, transform: 'translateX(-50%)', lineHeight: '12px', whiteSpace: 'nowrap', pointerEvents: 'none' }}>{isDyeOrder(b.o) ? <DyeMark /> : null}{isWashOrder(b.o) ? <WashMark /> : null}{isMultiOrder(b.o) ? <MultiMark o={b.o} /> : null}</div>}
+              </div>
             );
-          })), `od-${lane.name}`, undefined, isPrivateLane(lane), rh); })}
+          })), `od-${lane.name}`, undefined, isPrivateLane(lane), rh, { count: `${lane.rows.flat().length} 单`, avatar: lane.rows.flat().find((b) => b.o.craftsmanAvatarUrl)?.o.craftsmanAvatarUrl ?? null }); })}
           {linkLayer()}
           {!eventLanes.length && !orderLanes.length && <div style={{ padding: 24, color: '#999' }}>暂无数据</div>}
         </div>
