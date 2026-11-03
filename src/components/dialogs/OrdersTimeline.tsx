@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Image, Popover, Segmented, Space, Spin, Tooltip, message } from 'antd';
-import { CopyOutlined, VideoCameraOutlined } from '@ant-design/icons';
+import { CopyOutlined, DownOutlined, UpOutlined, VideoCameraOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { pageBehaviorRules, pageReviewRecords, pageRiskEventItems } from '../../api/wdz';
 import { APP, PRIMARY_LABELS, RISK_LABELS } from '../../constants/marks';
@@ -125,6 +125,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
   const [pinIds, setPinIds] = useState<string[]>([]);
   /** 事件 ID → 最新一条初核/复核记录的备注 */
   const [remarks, setRemarks] = useState<Map<string, { first?: string; second?: string }>>(new Map());
+  const [legendMore, setLegendMore] = useState(false); // 图例默认只展示事件/订单
   const [hover, setHover] = useState<{ kind: 'e' | 'o'; key: string; part?: OrderPart } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const base = useMemo(() => (event?.eventTime ? dayjs(String(event.eventTime).slice(0, 10)) : null), [event?.eventTime]);
@@ -460,8 +461,8 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
     </span>
   );
   const legendRows: [string, React.ReactNode[]][] = [
-    ['事件', [item(RED, '高/私单'), item(ORANGE, '中'), item(GREEN, '预警/低/无风险/不合规'), item(GREY, '无效/互剪/重修/重复')]],
-    ['订单', [item(ORDER_WINDOW, '窗口'), item(ORDER_NEAR, '附近'), item(ORDER_OTHER, '其他计算'), item(ORDER_OFF, '不参与计算'), item(waitColor(ORDER_NEAR), '排队等待(同订单色)', WAIT_H), item('#000', '支付', 8, 2)]],
+    ['事件', [item(RED, '高/私单'), item(ORANGE, '中'), item(GREEN, '低风险'), item(GREY, '无效')]],
+    ['订单', [item(ORDER_WINDOW, '窗口'), item(ORDER_NEAR, '附近'),item(ORDER_OFF, '不参与计算'), item(waitColor(ORDER_NEAR), '排队等待(同订单色)', WAIT_H), item('#000', '支付', 8, 2)]],
     ['标记', [item(MARK_FG.private, '私单'), item(MARK_FG.kept, '无风险/不合规'), item(MARK_FG.dropped, '互剪/重修/无效/重复'), item('#722ed1', '烫染'), item(MULTI_COLOR, '多项目'), item(WASH_COLOR, '洗吹(条变淡)'), linkItem(false, '标记关联订单'), linkItem(true, '备注订单')]],
     ['底色', [item('rgba(250,173,20,0.35)', `窗口 ${params.window}′`), item('rgba(22,119,255,0.18)', `附近 ±${params.nearby}′`), <span key="cur" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
       <span style={{ width: 10, display: 'inline-flex', justifyContent: 'center' }}><i style={{ height: 8, borderLeft: '1px dashed #f5222d' }} /></span>当前事件起止
@@ -639,10 +640,14 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
       </div>
       {/* 图例弱化：小字浅灰、色块缩小、行距收紧 */}
       <div style={{ fontSize: 11, lineHeight: '16px', marginTop: 6, display: 'grid', gridTemplateColumns: 'auto 1fr', rowGap: 2, columnGap: 10, color: '#8c8c8c' }}>
-        {legendRows.map(([k, v]) => [
+        {legendRows.slice(0, legendMore ? legendRows.length : 2).map(([k, v]) => [
           <span key={`${k}-k`} style={{ color: '#bfbfbf' }}>{k}</span>,
           <Space key={`${k}-v`} size={12} wrap>{v}</Space>,
         ])}
+        {/* 末行左侧：查看更多 / 收起（标记、底色两行） */}
+        <a data-testid="tl-legend-more" onClick={() => setLegendMore((m) => !m)} style={{ gridColumn: '1 / -1', justifySelf: 'start', fontSize: 11, color: '#1677ff' }}>
+          {legendMore ? '收起' : '查看更多'} {legendMore ? <UpOutlined /> : <DownOutlined />}
+        </a>
       </div>
       {previewUrl && <Image src={previewUrl} style={{ display: 'none' }} preview={{ visible: true, src: previewUrl, onVisibleChange: (v) => { if (!v) setPreviewUrl(null); } }} />}
     </div>
