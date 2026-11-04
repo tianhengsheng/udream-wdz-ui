@@ -554,7 +554,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
           }), 'axis', '#fafafa', false, ROW_H, {
             muted: true,
             // 左上角放当前显示总数（受订单状态/订单号筛选影响）
-            label: <span data-testid="tl-totals" style={{ fontSize: 11 }}>事件 <b style={{ color: '#262626' }}>{eventBars.length}</b><span style={{ margin: '0 4px', color: '#d9d9d9' }}>·</span>订单 <b style={{ color: '#262626' }}>{orderBars.length}</b></span>,
+            label: <span data-testid="tl-totals" style={{ fontSize: 11 }}>事件 <b style={{ color: '#d46b08' }}>{eventBars.length}</b><span style={{ margin: '0 4px', color: '#d9d9d9' }}>·</span>订单 <b style={{ color: '#1677ff' }}>{orderBars.length}</b></span>,
           })}
           {/* AI 事件泳道 */}
           {eventLanes.map((lane, li) => laneBlock(lane.name, lane.rows.length, lane.rows.flatMap((row, ri) => row.map((b) => {
