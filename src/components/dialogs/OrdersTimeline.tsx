@@ -313,7 +313,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
         {row('发型师', b.o.craftsmanName || '-')}
         {row('项目', <>{isDyeOrder(b.o) ? <><DyeText /> · </> : null}{isWashOrder(b.o) ? <><span style={{ color: '#69b1ff', fontWeight: 600 }}>洗吹</span> · </> : null}{isMultiOrder(b.o) ? <><span style={{ color: '#ff85c0', fontWeight: 600 }}>{itemCount(b.o)}项</span> · </> : null}{b.o.serviceItemName || '-'}</>)}
         {row('金额', money(b.o.orderAmount))}
-        {row('服务', <>{hm(b.o.serviceStartTime)} ~ {hm(b.o.serviceEndTime)}{svcMin != null ? <span style={{ color: 'rgba(255,255,255,0.45)' }}> · {minText(svcMin)}</span> : null}{corrected ? <div style={{ color: 'rgba(255,255,255,0.45)' }}>矫正开始 {corrected}</div> : null}</>)}
+        {(b.o.serviceStartTime || b.o.serviceEndTime) && row('服务', <>{hm(b.o.serviceStartTime)} ~ {hm(b.o.serviceEndTime)}{svcMin != null ? <span style={{ color: 'rgba(255,255,255,0.45)' }}> · {minText(svcMin)}</span> : null}{corrected ? <div style={{ color: 'rgba(255,255,255,0.45)' }}>矫正开始 {corrected}</div> : null}</>)}
         {row('单号', <>
           <span style={{ color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace' }}>{b.o.orderNo || '-'}</span>
           {b.o.orderNo && (
