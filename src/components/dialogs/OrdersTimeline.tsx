@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Image, Popover, Segmented, Space, Spin, Tooltip, message } from 'antd';
-import { CopyOutlined, DownOutlined, UpOutlined, VideoCameraOutlined } from '@ant-design/icons';
+import { CopyOutlined, DownOutlined, UpOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { pageBehaviorRules, pageReviewRecords, pageRiskEventItems } from '../../api/wdz';
 import { APP, PRIMARY_LABELS, RISK_LABELS } from '../../constants/marks';
@@ -28,6 +28,16 @@ const MARK_STYLES: Record<string, { text: string; fg: string }> = {
   STYLIST_MUTUAL_CUT: { text: '互剪', fg: MARK_FG.dropped }, SHORT_TERM_REWORK: { text: '重修', fg: MARK_FG.dropped },
   INVALID_EVENT: { text: '无效', fg: MARK_FG.dropped }, DUPLICATE_EVENT: { text: '重复', fg: MARK_FG.dropped },
 };
+/** 监控摄像头图标（线性，随文字色） */
+const CctvIcon = () => (
+  <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M16.75 12h3.632a1 1 0 0 1 .894 1.447l-2.034 4.069a1 1 0 0 1-1.708.134l-2.124-2.97" />
+    <path d="M17.106 9.053a1 1 0 0 1 .447 1.341l-3.106 6.211a1 1 0 0 1-1.342.447L3.61 12.3a2.92 2.92 0 0 1-1.3-3.91L3.69 5.6a2.92 2.92 0 0 1 3.92-1.3z" />
+    <path d="M2 19h3.76a2 2 0 0 0 1.8-1.1L9 15" /><path d="M2 21v-4" /><path d="M7 9h.01" />
+  </svg>
+);
+/** 悬停高亮统一：形状不变，外加同色光圈（灰色加深） */
+const glow = (c: string) => `0 0 0 2px ${c === ORDER_OFF || c === GREY ? '#8c8c8c' : c}59`;
 const barColor = (e: RiskEvent) => {
   const fg = e.primaryMarkType ? MARK_STYLES[e.primaryMarkType]?.fg : undefined;
   if (fg === MARK_FG.private) return RED;
@@ -439,8 +449,8 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
           </span>
         )}
         {meta.ai ? (
-          // AI 工位：摄像头图标，与发型师头像同尺寸圆形
-          <span title="AI 摄像头检测工位" style={{ flex: 'none', width: AVATAR, height: AVATAR, marginTop: (Math.min(rowH, 30) - AVATAR) / 2, borderRadius: '50%', background: '#fff7e6', border: '1px solid #ffd591', boxSizing: 'border-box', color: '#d46b08', fontSize: 11, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><VideoCameraOutlined /></span>
+          // AI 工位：黑底白线摄像头，与发型师头像同尺寸圆形
+          <span title="AI 摄像头检测工位" style={{ flex: 'none', width: AVATAR, height: AVATAR, marginTop: (Math.min(rowH, 30) - AVATAR) / 2, borderRadius: '50%', background: '#262626', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><CctvIcon /></span>
         ) : null}
         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: meta.muted ? undefined : 500 }}>{meta.label ?? name}</span>
         {meta.count ? <span style={{ flex: 'none', fontSize: 11, color: '#8c8c8c', fontWeight: 400 }}>{meta.count}</span> : null}
@@ -512,7 +522,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
     <div data-testid="orders-timeline">
       {/* 上方只留操作 */}
       <div style={{ marginBottom: 8 }}>
-        <Segmented size="small" value={scale} options={SCALES} onChange={(v) => setScale(Number(v))} />
+        <Segmented value={scale} options={SCALES} onChange={(v) => setScale(Number(v))} />
       </div>
       {pinBar()}
       <div ref={scrollRef} style={{ overflowX: 'auto', border: '1px solid #f0f0f0', position: 'relative' }}>
@@ -555,7 +565,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
             const selected = selectedId === id, no = pinNo.get(id);
             const lit = !!no && hover?.kind === 'e' && hover.key === id;
             // 当前事件不改色（与图例一致），只加细边框；选中=蓝描边，已固定对比=紫描边（与卡片互相悬停时加粗）
-            const ring = [isCur ? 'inset 0 0 0 1px rgba(0,0,0,0.6)' : '', selected ? '0 0 0 2px #1677ff' : no ? `0 0 0 ${lit ? 3 : 2}px ${PIN_COLOR}` : ''].filter(Boolean).join(', ');
+            const ring = [isCur ? 'inset 0 0 0 1px rgba(0,0,0,0.6)' : '', selected ? '0 0 0 2px #1677ff' : no ? `0 0 0 ${lit ? 3 : 2}px ${PIN_COLOR}` : hover?.kind === 'e' && hover.key === id ? glow(barColor(b.e)) : ''].filter(Boolean).join(', ');
             return [
               <Popover key={b.e.eventId} trigger="click" placement="bottom" content={eventPopover(b)}
                 open={selected && !previewUrl} onOpenChange={(v) => setSelectedId((sid) => (v ? id : sid === id ? null : sid))}>
@@ -585,18 +595,17 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
             const k = orderKeyOf(b.o);
             const part = hover?.kind === 'o' && hover.key === k ? hover.part : undefined;
             const enter = (p?: OrderPart) => () => setHover({ kind: 'o', key: k, part: p });
-            // 悬停高亮统一：形状不变，外加同色光圈
-            const hl = (p: OrderPart, c: string) => (part === p ? `0 0 0 2px ${c === ORDER_OFF ? '#8c8c8c' : c}59` : undefined);
+            const hl = (p: OrderPart, c: string) => (part === p ? glow(c) : undefined);
             const wc = waitColor(color);
             const sx = b.start != null ? x(b.start) - x(b.from) : 0, sw = b.start != null ? Math.max(3, x(b.end ?? b.start + 1) - x(b.start)) : 6;
             return (
               // 每段各挂 Tooltip，箭头对准悬停的那一段
-              // 只在订单块上响应点击：容器上绑点击会被悬浮窗（portal）里的点击冒泡触发
+              // 点击绑在各段上：绑容器会被悬浮窗（portal）里的点击冒泡触发
               <div key={k} onMouseEnter={() => setHover({ kind: 'o', key: k })} onMouseLeave={() => setHover(null)} style={{ position: 'absolute', left: x(b.from), width: Math.max(4, x(b.to) - x(b.from)), top, height: ROW_H, zIndex: 2 }}>
                 {b.create != null && b.start != null && b.start > b.create && (
                   <Tooltip title={orderTip(b, 'wait')}>
-                    <div onMouseEnter={enter('wait')} onMouseLeave={enter()}
-                      style={{ position: 'absolute', left: 0, width: x(b.start) - x(b.create), top: 0, height: ROW_H }}>
+                    <div onClick={() => onOrderClick(b.o)} onMouseEnter={enter('wait')} onMouseLeave={enter()}
+                      style={{ position: 'absolute', cursor: 'pointer', left: 0, width: x(b.start) - x(b.create), top: 0, height: ROW_H }}>
                       {/* 整行高透明热区，线细也好悬停 */}
                       <div style={{ position: 'absolute', left: 0, right: 0, top: ROW_H / 2 - WAIT_H / 2, height: WAIT_H, background: wc, borderRadius: BAR_R, boxShadow: hl('wait', color) }} />
                     </div>
@@ -605,7 +614,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
                 {b.create != null && b.start != null && b.start > b.create && (
                   <Tooltip title={orderTip(b, 'create')}>
                     {/* 下单圆点：独立 12px 热区 */}
-                    <div onMouseEnter={enter('create')} onMouseLeave={enter()} style={{ position: 'absolute', left: -4, top: ROW_H / 2 - 6, width: 12, height: 12, zIndex: 1 }}>
+                    <div onClick={() => onOrderClick(b.o)} onMouseEnter={enter('create')} onMouseLeave={enter()} style={{ position: 'absolute', cursor: 'pointer', left: -4, top: ROW_H / 2 - 6, width: 12, height: 12, zIndex: 1 }}>
                       <i style={{ position: 'absolute', left: 3, top: 3, width: 6, height: 6, borderRadius: 3, background: '#fff', border: `1.5px solid ${wc}`, boxSizing: 'border-box', boxShadow: hl('create', color) }} />
                     </div>
                   </Tooltip>
@@ -625,7 +634,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
                 )}
                 {b.pay != null && (
                   <Tooltip title={orderTip(b, 'pay')}>
-                    <div onMouseEnter={enter('pay')} onMouseLeave={enter()} style={{ position: 'absolute', left: x(b.pay) - x(b.from) - 3, width: 8, top: 0, height: ROW_H, zIndex: 1 }}>
+                    <div onClick={() => onOrderClick(b.o)} onMouseEnter={enter('pay')} onMouseLeave={enter()} style={{ position: 'absolute', cursor: 'pointer', left: x(b.pay) - x(b.from) - 3, width: 8, top: 0, height: ROW_H, zIndex: 1 }}>
                       <i style={{ position: 'absolute', left: 3, top: 3, width: 2, height: ROW_H - 6, background: '#000', boxShadow: hl('pay', '#000000') }} />
                     </div>
                   </Tooltip>
