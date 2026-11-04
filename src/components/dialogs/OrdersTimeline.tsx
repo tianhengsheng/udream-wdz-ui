@@ -53,7 +53,7 @@ const PRIVATE_COLOR = '#a8071a', ORDER_WINDOW = '#08979c', ORDER_NEAR = '#4a6285
 /** 时长：满 1 小时显示「X 小时 Y 分钟」 */
 const minText = (min: number) => { const v = Math.round(min), h = Math.floor(v / 60), r = v % 60; return h ? `${h} 小时${r ? ` ${r} 分钟` : ''}` : `${r} 分钟`; };
 const WAIT_H = 4;
-/** 事件/订单色块圆角（0 = 直角） */
+/** 色块与小标签圆角（0 = 直角） */
 const BAR_R = 0;
 const waitColor = (c: string) => (c === ORDER_OFF ? '#bfbfbf' : `${c}8c`);
 const SCALES = [{ label: '全天', value: 0.8 }, { label: '标准', value: 2 }, { label: '放大', value: 5 }];
@@ -62,10 +62,10 @@ const LABEL_W = 120, ROW_H = 24, DAY_END = 27 * 60; // 次日 03:00
 const isDyeEvent = (e: RiskEvent) => e.serviceType === '染发';
 const isDyeOrder = (o: EventOrder) => o.itemCategory === 1;
 const DyeText = () => <span style={{ color: '#b37feb', fontWeight: 600 }}>烫染</span>;
-const PrivateMark = () => <span style={{ fontSize: 9, lineHeight: '12px', padding: '0 2px', marginRight: 3, background: PRIVATE_COLOR, color: '#fff', borderRadius: 2 }}>私</span>;
+const PrivateMark = () => <span style={{ fontSize: 9, lineHeight: '12px', padding: '0 2px', marginRight: 3, background: PRIVATE_COLOR, color: '#fff', fontWeight: 300, borderRadius: BAR_R }}>私</span>;
 /** 条下方小标签：悬停给释义，方便新用户（容器 pointerEvents:none，标签自身单独打开） */
 const TagMark = ({ text, bg, tip }: { text: string; bg: string; tip: React.ReactNode }) => (
-  <Tooltip title={tip}><span style={{ fontSize: 9, lineHeight: '12px', padding: '0 2px', marginRight: 2, background: bg, color: '#fff', borderRadius: 2, pointerEvents: 'auto', cursor: 'help' }}>{text}</span></Tooltip>
+  <Tooltip title={tip}><span style={{ fontSize: 9, lineHeight: '12px', padding: '0 2px', marginRight: 2, background: bg, color: '#fff', fontWeight: 300, borderRadius: BAR_R, pointerEvents: 'auto', cursor: 'help' }}>{text}</span></Tooltip>
 );
 const DyeMark = ({ event }: { event?: boolean }) => <TagMark text="染" bg="#722ed1" tip={event ? '烫染事件' : '烫染订单'} />;
 /** 多服务项目订单（服务项目名按逗号/顿号拆分超过 1 项），条下方加「多」字 */
