@@ -30,7 +30,7 @@ const MARK_STYLES: Record<string, { text: string; fg: string }> = {
 };
 /** 监控摄像头图标（线性，随文字色） */
 const CctvIcon = () => (
-  <svg viewBox="0 0 24 24" width={13} height={13} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+  <svg viewBox="0 0 24 24" width={15} height={15} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d="M16.75 12h3.632a1 1 0 0 1 .894 1.447l-2.034 4.069a1 1 0 0 1-1.708.134l-2.124-2.97" />
     <path d="M17.106 9.053a1 1 0 0 1 .447 1.341l-3.106 6.211a1 1 0 0 1-1.342.447L3.61 12.3a2.92 2.92 0 0 1-1.3-3.91L3.69 5.6a2.92 2.92 0 0 1 3.92-1.3z" />
     <path d="M2 19h3.76a2 2 0 0 0 1.8-1.1L9 15" /><path d="M2 21v-4" /><path d="M7 9h.01" />
@@ -436,7 +436,7 @@ export function OrdersTimeline({ orders, ordersLoading, event, onOrderClick }: {
 
   /** 泳道左侧标签：名称 + 右侧计数；AI 泳道带「AI」标识，分组末行底线加深（不改高度，连线坐标不受影响） */
   type LaneMeta = { label?: React.ReactNode; count?: string; ai?: boolean; groupEnd?: boolean; muted?: boolean; avatar?: string | null };
-  const AVATAR = 20;
+  const AVATAR = 24;
   const laneBlock = (name: string, rowCount: number, children: React.ReactNode, key: string, tint?: string, privateLane = false, rowH = ROW_H, meta: LaneMeta = {}) => (
     <div key={key} style={{ display: 'flex', borderBottom: `1px solid ${meta.groupEnd ? '#d9d9d9' : '#f0f0f0'}`, background: tint }}>
       <div style={{ width: LABEL_W, boxSizing: 'border-box', flex: 'none', position: 'sticky', left: 0, zIndex: 3, background: tint || '#fff', padding: '0 8px', fontSize: 12, height: rowCount * rowH, borderRight: '1px solid #f0f0f0',
